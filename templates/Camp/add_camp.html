@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add Camp</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<h2>Add Camp</h2>
+
+<form method="POST" id="campForm">
+
+    <input type="text" name="name"
+           placeholder="Camp Name (Unique)"
+           required>
+
+    <label>X Coordinate (0–1000)</label>
+    <input type="number" name="x" min="0" max="1000" required>
+
+    <label>Y Coordinate (0–1000)</label>
+    <input type="number" name="y" min="0" max="1000" required>
+
+    <label>Total Population</label>
+    <input type="number" name="total_population" min="0" required>
+
+    <label>Injured Population</label>
+    <input type="number" name="injured_population" min="0" required>
+
+    <p id="urgencyPreview"></p>
+
+    <button type="submit">Create Camp</button>
+</form>
+
+<a href="/camp/dashboard">⬅ Back</a>
+
+<script src="/static/script.js"></script>
+</body>
+</html>

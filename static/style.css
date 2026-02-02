@@ -30,3 +30,17 @@ button {
 button:hover {
     background: #1e40af;
 }
+
+.btn {
+    display: inline-block;
+    padding: 10px 15px;
+    background: #16a34a;
+    color: white;
+    text-decoration: none;
+    border-radius: 6px;
+    margin-bottom: 15px;
+}
+
+.btn:hover {
+    background: #15803d;
+}

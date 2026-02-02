@@ -91,6 +91,87 @@ def driverBoard():
         return redirect(url_for("login"))
     return render_template("dashboard/driver.html")
 
+@app.route("/camps")
+def view_camps():
+    if "role" not in session:
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT camp_id, name, cord_x, cord_y,
+               total_population, injured_population,
+               urgency_score, status, created_at
+        FROM camps
+        ORDER BY urgency_score DESC
+    """)
+
+    camps = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    return render_template("Camp/view_camps.html", camps=camps)
+
+@app.route("/camp/add", methods=["GET", "POST"])
+def add_camp():
+    if session.get("role") != "camp_manager":
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        name = request.form["name"]
+        x = int(request.form["x"])
+        y = int(request.form["y"])
+        total_pop = int(request.form["total_population"])
+        injured_pop = int(request.form["injured_population"])
+
+        urgency = calculate_urgency(total_pop, injured_pop)
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        try:
+            cur.execute(
+                """
+                INSERT INTO camps
+                (name, cord_x, cord_y,
+                 total_population, injured_population,
+                 urgency_score, manager_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (
+                    name, x, y,
+                    total_pop, injured_pop,
+                    urgency, session["user_id"]
+                )
+            )
+            conn.commit()
+
+        except Exception as e:
+            conn.rollback()
+            return "Camp name or coordinates already exist"
+
+        finally:
+            cur.close()
+            conn.close()
+
+        return redirect(url_for("campBoard"))
+
+    return render_template("Camp/add_camp.html")
+
+
+def calculate_urgency(total_population, injured_population):
+    if total_population == 0:
+        return 0.0
+
+    score = (
+        (injured_population / total_population) * 0.7
+        + (total_population / 1000) * 0.3
+    )
+
+    return round(min(score, 1.0), 2)
+
+
 @app.route("/logout")
 def logout():
     session.clear()
