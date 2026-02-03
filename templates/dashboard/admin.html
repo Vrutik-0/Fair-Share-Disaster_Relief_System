@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
     <link
   rel="stylesheet"
   href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -11,9 +13,35 @@
 
     <title>Document</title>
 </head>
+
 <body>
-    <h2>Admin Dashboard</h2>
-<p>Welcome, {{ session.name }}</p>
+
+   <h2>Admin Dashboard</h2>
+
+<div class="card-container">
+
+    <div class="card">
+        <h3>Total Camps</h3>
+        <p>{{ total_camps }}</p>
+    </div>
+
+    <div class="card critical">
+        <h3>Critical Camps</h3>
+        <p>{{ critical_camps }}</p>
+    </div>
+
+    <div class="card moderate">
+        <h3>Moderate Camps</h3>
+        <p>{{ moderate_camps }}</p>
+    </div>
+
+    <div class="card avg">
+        <h3>Avg Urgency</h3>
+        <p>{{ avg_urgency }}</p>
+    </div>
+
+</div>
+
 <a href="/camps" class="btn"> View All Camps</a>
 <h3>Camp Map</h3>
 <div id="map" style="height: 400px; width: 500px;"></div>

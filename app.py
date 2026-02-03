@@ -75,7 +75,30 @@ def login():
 def adminBoard():
     if session.get("role") != "admin":
         return redirect(url_for("login"))
-    return render_template("dashboard/admin.html")
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+        COUNT(*) AS total_camps,
+        COUNT(*) FILTER (WHERE urgency_score >= 0.7) AS critical_camps,
+        COUNT(*) FILTER (WHERE urgency_score >= 0.4 AND urgency_score < 0.7) AS moderate_camps,
+        ROUND(AVG(urgency_score)::numeric, 2) AS avg_urgency
+    FROM camps
+    """)
+
+    stats = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "dashboard/admin.html",
+        total_camps=stats[0],
+        critical_camps=stats[1],
+        moderate_camps=stats[2],
+        avg_urgency=stats[3] or 0
+    )
 
 
 @app.route("/camp/dashboard")
