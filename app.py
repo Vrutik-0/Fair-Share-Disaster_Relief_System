@@ -221,6 +221,72 @@ def api_camps():
 
     return {"camps": camps}
 
+@app.route("/warehouse")
+def warehouse_view():
+    if session.get("role") not in ["admin", "camp_manager"]:
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT item_name, item_type, quantity, unit, low_stock_threshold
+        FROM warehouse_inventory
+        ORDER BY item_name
+    """)
+
+    items = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    return render_template("warehouse/view_inventory.html", items=items)
+
+
+@app.route("/warehouse/add", methods=["GET", "POST"])
+def add_warehouse_stock():
+    if session.get("role") != "admin":
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        item_type = request.form["item_type"]
+        unit = request.form["unit"]
+        quantity = int(request.form["quantity"])
+        threshold = int(request.form["low_stock_threshold"])
+
+        item_name = request.form.get("item_name")
+        if item_name == "":
+            item_name = None
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        try:
+            cur.execute("""
+                INSERT INTO warehouse_inventory
+                (item_name, item_type, quantity, unit, low_stock_threshold)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (item_type, unit)
+                DO UPDATE SET
+                    quantity = warehouse_inventory.quantity + EXCLUDED.quantity,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (item_name, item_type, quantity, unit, threshold))
+
+            conn.commit()
+
+        except Exception as e:
+            conn.rollback()
+            print("WAREHOUSE ERROR:", e)
+            return str(e)
+
+        finally:
+            cur.close()
+            conn.close()
+
+        return redirect(url_for("warehouse_view"))
+
+    return render_template("warehouse/add_inventory.html")
+
+
 
 def calculate_urgency(total_population, injured_population):
     if total_population == 0:

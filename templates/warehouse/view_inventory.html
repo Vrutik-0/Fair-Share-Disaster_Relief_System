@@ -1,0 +1,28 @@
+<h2>Central Warehouse Inventory</h2>
+
+{% if session.role == 'admin' %}
+<a href="/warehouse/add" class="btn">Add Stock</a>
+{% endif %}
+
+<table>
+    <tr>
+        <th>Item</th>
+        <th>Type</th>
+        <th>Quantity</th>
+        <th>Unit</th>
+        <th>Status</th>
+    </tr>
+
+    {% for i in items %}
+    <tr>
+        <td>{{ i[0] }}</td>
+        <td>{{ i[1] }}</td>
+        <td>{{ i[2] }}</td>
+        <td>{{ i[3] }}</td>
+        <td>
+    {{ i[0] if i[0] else i[1]|capitalize }}
+</td>
+
+    </tr>
+    {% endfor %}
+</table>
