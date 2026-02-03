@@ -20,9 +20,12 @@
         <td>{{ i[2] }}</td>
         <td>{{ i[3] }}</td>
         <td>
-    {{ i[0] if i[0] else i[1]|capitalize }}
-</td>
-
+            {% if i[2] < i[4] %}
+                <span style="color:red;">Low Stock</span>
+            {% else %}
+                OK
+            {% endif %}
+        </td>
     </tr>
     {% endfor %}
 </table>

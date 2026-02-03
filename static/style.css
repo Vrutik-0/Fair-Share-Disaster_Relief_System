@@ -73,7 +73,6 @@ button:hover {
     margin: 0;
 }
 
-/* Color coding */
 .card.critical {
     border-bottom: 6px solid #dc2626;
 }
