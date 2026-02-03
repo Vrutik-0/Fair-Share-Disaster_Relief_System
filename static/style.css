@@ -44,3 +44,17 @@ button:hover {
 .btn:hover {
     background: #15803d;
 }
+
+.map-wrapper {
+    width: 520px;        /* square size */
+    height: 520px;
+    margin-left: 20px;  /* left aligned spacing */
+    margin-top: 10px;
+}
+
+#map {
+    width: 100%;
+    height: 100%;
+    border: 2px solid #ccc;
+    border-radius: 6px;
+}

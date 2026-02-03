@@ -159,6 +159,34 @@ def add_camp():
 
     return render_template("Camp/add_camp.html")
 
+@app.route("/api/camps")
+def api_camps():
+    if "role" not in session:
+        return {"error": "unauthorized"}, 401
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT name, cord_x, cord_y, urgency_score
+        FROM camps
+    """)
+
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    camps = []
+    for r in rows:
+        camps.append({
+            "name": r[0],
+            "lat": r[1],   # cord_x → latitude
+            "lng": r[2],   # cord_y → longitude
+            "urgency": r[3]
+        })
+
+    return {"camps": camps}
+
 
 def calculate_urgency(total_population, injured_population):
     if total_population == 0:

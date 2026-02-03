@@ -1,5 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <title>Document</title>
+</head>
+<body>
+    
 <h2>Camp Manager Dashboard</h2>
 <p>Welcome, {{ session.name }}</p>
 <a href="/camp/add" class="btn"> Add Camp</a><br>
 <a href="/camps" class="btn"> View All Camps</a><br>
+<h3>Camp Map (Prototype)</h3>
+
+<div id="map" style="height: 400px; width: 500px;"></div>
+
+<script src="/static/script.js"></script>
+
 <a href="/logout">Logout</a>
+
+</body>
+</html>
