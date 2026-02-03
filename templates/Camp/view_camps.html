@@ -10,28 +10,36 @@
 
 <table border="1" cellpadding="8">
     <tr>
-        <th>Name</th>
-        <th>X</th>
-        <th>Y</th>
-        <th>Total Pop</th>
-        <th>Injured</th>
-        <th>Urgency</th>
-        <th>Status</th>
-        <th>Created</th>
-    </tr>
+    <th>Camp ID</th>
+    <th>Name</th>
+    <th>X</th>
+    <th>Y</th>
+    <th>Total Pop</th>
+    <th>Injured</th>
+    <th>Urgency</th>
+    <th>Status</th>
+    <th>Manager ID</th>
+    <th>Manager Name</th>
+    <th>Created</th>
+</tr>
 
-    {% for c in camps %}
-    <tr>
-        <td>{{ c[1] }}</td>
-        <td>{{ c[2] }}</td>
-        <td>{{ c[3] }}</td>
-        <td>{{ c[4] }}</td>
-        <td>{{ c[5] }}</td>
-        <td>{{ c[6] }}</td>
-        <td>{{ c[7] }}</td>
-        <td>{{ c[8].strftime('%Y-%m-%d') }}</td>
-    </tr>
-    {% endfor %}
+
+   {% for c in camps %}
+<tr>
+    <td>{{ c[0] }}</td>
+    <td>{{ c[1] }}</td>
+    <td>{{ c[2] }}</td>
+    <td>{{ c[3] }}</td>
+    <td>{{ c[4] }}</td>
+    <td>{{ c[5] }}</td>
+    <td>{{ c[6] }}</td>
+    <td>{{ c[7] }}</td>
+    <td>{{ c[9] }}</td>
+    <td>{{ c[10] or "N/A" }}</td>
+    <td>{{ c[8].strftime('%Y-%m-%d') }}</td>
+</tr>
+{% endfor %}
+
 </table>
 
 <br>

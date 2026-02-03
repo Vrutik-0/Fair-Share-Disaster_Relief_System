@@ -100,11 +100,21 @@ def view_camps():
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT camp_id, name, cord_x, cord_y,
-               total_population, injured_population,
-               urgency_score, status, created_at
-        FROM camps
-        ORDER BY urgency_score DESC
+        SELECT 
+            c.camp_id,
+            c.name,
+            c.cord_x,
+            c.cord_y,
+            c.total_population,
+            c.injured_population,
+            c.urgency_score,
+            c.status,
+            c.created_at,
+            u.id AS manager_id,
+            u.name AS manager_name
+        FROM camps c
+        LEFT JOIN users u ON c.manager_id = u.id
+        ORDER BY c.urgency_score DESC
     """)
 
     camps = cur.fetchall()
