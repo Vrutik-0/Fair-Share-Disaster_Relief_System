@@ -51,7 +51,15 @@ async function loadCampsOnMap() {
             }
         ).addTo(map);
 
-        marker.bindPopup(`
+        //For Click Expandable Dots
+        /*marker.bindPopup(`
+            <b>${camp.name}</b><br>
+            Urgency: ${camp.urgency}<br>
+            X: ${camp.lat}, Y: ${camp.lng}
+        `);*/
+
+        //For Hover Expandable Dots
+        marker.bindTooltip(`
             <b>${camp.name}</b><br>
             Urgency: ${camp.urgency}<br>
             X: ${camp.lat}, Y: ${camp.lng}
@@ -72,13 +80,12 @@ if (document.getElementById("map")) {
 
     // boundary box
     L.rectangle(bounds, {
-        color: "#999",
+        color: "#5f5f5f",
         weight: 2,
         fill: false
     }).addTo(map);
 
-    // 🔳 ADD GRID HERE
-    drawGrid(map, 100); // 100-unit grid
+    drawGrid(map, 50); //grid units
 
     loadCampsOnMap();
     setInterval(loadCampsOnMap, 3000);
@@ -88,11 +95,11 @@ if (document.getElementById("map")) {
 function drawGrid(map, step = 100) {
     const lines = [];
 
-    // vertical lines
+    //vertical line
     for (let x = 0; x <= 1000; x += step) {
         lines.push(
             L.polyline([[0, x], [1000, x]], {
-                color: "#cccccc",
+                color: "#b6b6b6",
                 weight: 1,
                 opacity: 0.6,
                 interactive: false
@@ -100,11 +107,11 @@ function drawGrid(map, step = 100) {
         );
     }
 
-    // horizontal lines
+    //horizontal line
     for (let y = 0; y <= 1000; y += step) {
         lines.push(
             L.polyline([[y, 0], [y, 1000]], {
-                color: "#cccccc",
+                color: "#b6b6b6",
                 weight: 1,
                 opacity: 0.6,
                 interactive: false
