@@ -181,15 +181,14 @@ def api_camps():
     for r in rows:
         camps.append({
             "name": r[0],
-            "x": r[1],
-            "y": r[2],
+            "lat": r[1],   # cord_x → latitude
+            "lng": r[2],   # cord_y → longitude
             "urgency": r[3]
         })
 
     return {"camps": camps}
 
 
-#Calculate Urgency Score
 def calculate_urgency(total_population, injured_population):
     if total_population == 0:
         return 0.0

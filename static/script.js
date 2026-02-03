@@ -22,61 +22,95 @@ if (totalPop && injuredPop) {
     injuredPop.addEventListener("input", updateUrgency);
 }
 
-const canvas = document.getElementById("campMap");
+let mapInitialized = false;
+let map;
+let markers = [];
 
-if (canvas) {
-    const ctx = canvas.getContext("2d");
-    const SCALE = 0.5; // 1000 → 500
+function getColor(urgency) {
+    if (urgency >= 0.7) return "red";
+    if (urgency >= 0.4) return "orange";
+    return "green";
+}
 
-    function drawGrid() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.strokeStyle = "#e5e7eb";
+async function loadCampsOnMap() {
+    const res = await fetch("/api/camps");
+    const data = await res.json();
 
-        for (let i = 0; i <= 1000; i += 100) {
-            ctx.beginPath();
-            ctx.moveTo(i * SCALE, 0);
-            ctx.lineTo(i * SCALE, 500);
-            ctx.stroke();
+    // clear old markers
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
 
-            ctx.beginPath();
-            ctx.moveTo(0, i * SCALE);
-            ctx.lineTo(500, i * SCALE);
-            ctx.stroke();
-        }
+    data.camps.forEach(camp => {
+        const marker = L.circleMarker(
+            [camp.lat, camp.lng],
+            {
+                radius: 8,
+                color: getColor(camp.urgency),
+                fillColor: getColor(camp.urgency),
+                fillOpacity: 0.8
+            }
+        ).addTo(map);
+
+        marker.bindPopup(`
+            <b>${camp.name}</b><br>
+            Urgency: ${camp.urgency}<br>
+            X: ${camp.lat}, Y: ${camp.lng}
+        `);
+
+        markers.push(marker);
+    });
+}
+
+if (document.getElementById("map")) {
+    map = L.map("map", {
+        crs: L.CRS.Simple,
+        minZoom: -2
+    });
+
+    const bounds = [[0, 0], [1000, 1000]];
+    map.fitBounds(bounds);
+
+    // boundary box
+    L.rectangle(bounds, {
+        color: "#999",
+        weight: 2,
+        fill: false
+    }).addTo(map);
+
+    // 🔳 ADD GRID HERE
+    drawGrid(map, 100); // 100-unit grid
+
+    loadCampsOnMap();
+    setInterval(loadCampsOnMap, 3000);
+}
+
+
+function drawGrid(map, step = 100) {
+    const lines = [];
+
+    // vertical lines
+    for (let x = 0; x <= 1000; x += step) {
+        lines.push(
+            L.polyline([[0, x], [1000, x]], {
+                color: "#cccccc",
+                weight: 1,
+                opacity: 0.6,
+                interactive: false
+            })
+        );
     }
 
-    function getColor(urgency) {
-        if (urgency >= 0.7) return "red";
-        if (urgency >= 0.4) return "orange";
-        return "green";
+    // horizontal lines
+    for (let y = 0; y <= 1000; y += step) {
+        lines.push(
+            L.polyline([[y, 0], [y, 1000]], {
+                color: "#cccccc",
+                weight: 1,
+                opacity: 0.6,
+                interactive: false
+            })
+        );
     }
 
-    function drawCamps(camps) {
-        camps.forEach(camp => {
-            ctx.beginPath();
-            ctx.arc(
-                camp.x * SCALE,
-                camp.y * SCALE,
-                5,
-                0,
-                Math.PI * 2
-            );
-            ctx.fillStyle = getColor(camp.urgency);
-            ctx.fill();
-        });
-    }
-
-    async function loadCamps() {
-        const res = await fetch("/api/camps");
-        const data = await res.json();
-
-        drawGrid();
-        drawCamps(data.camps);
-    }
-
-    // initial load
-    loadCamps();
-
-    // 🔁 auto-refresh every 3 seconds
-    setInterval(loadCamps, 3000);
+    lines.forEach(line => line.addTo(map));
 }
