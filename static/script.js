@@ -21,3 +21,62 @@ if (totalPop && injuredPop) {
     totalPop.addEventListener("input", updateUrgency);
     injuredPop.addEventListener("input", updateUrgency);
 }
+
+const canvas = document.getElementById("campMap");
+
+if (canvas) {
+    const ctx = canvas.getContext("2d");
+    const SCALE = 0.5; // 1000 → 500
+
+    function drawGrid() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = "#e5e7eb";
+
+        for (let i = 0; i <= 1000; i += 100) {
+            ctx.beginPath();
+            ctx.moveTo(i * SCALE, 0);
+            ctx.lineTo(i * SCALE, 500);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(0, i * SCALE);
+            ctx.lineTo(500, i * SCALE);
+            ctx.stroke();
+        }
+    }
+
+    function getColor(urgency) {
+        if (urgency >= 0.7) return "red";
+        if (urgency >= 0.4) return "orange";
+        return "green";
+    }
+
+    function drawCamps(camps) {
+        camps.forEach(camp => {
+            ctx.beginPath();
+            ctx.arc(
+                camp.x * SCALE,
+                camp.y * SCALE,
+                5,
+                0,
+                Math.PI * 2
+            );
+            ctx.fillStyle = getColor(camp.urgency);
+            ctx.fill();
+        });
+    }
+
+    async function loadCamps() {
+        const res = await fetch("/api/camps");
+        const data = await res.json();
+
+        drawGrid();
+        drawCamps(data.camps);
+    }
+
+    // initial load
+    loadCamps();
+
+    // 🔁 auto-refresh every 3 seconds
+    setInterval(loadCamps, 3000);
+}

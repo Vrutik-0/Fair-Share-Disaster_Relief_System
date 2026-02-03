@@ -113,6 +113,7 @@ def view_camps():
 
     return render_template("Camp/view_camps.html", camps=camps)
 
+#Add Camp by Camp Managers
 @app.route("/camp/add", methods=["GET", "POST"])
 def add_camp():
     if session.get("role") != "camp_manager":
@@ -159,7 +160,36 @@ def add_camp():
 
     return render_template("Camp/add_camp.html")
 
+@app.route("/api/camps")
+def api_camps():
+    if "role" not in session:
+        return {"error": "unauthorized"}, 401
 
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT name, cord_x, cord_y, urgency_score
+        FROM camps
+    """)
+
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    camps = []
+    for r in rows:
+        camps.append({
+            "name": r[0],
+            "x": r[1],
+            "y": r[2],
+            "urgency": r[3]
+        })
+
+    return {"camps": camps}
+
+
+#Calculate Urgency Score
 def calculate_urgency(total_population, injured_population):
     if total_population == 0:
         return 0.0
@@ -171,7 +201,7 @@ def calculate_urgency(total_population, injured_population):
 
     return round(min(score, 1.0), 2)
 
-
+#Logout
 @app.route("/logout")
 def logout():
     session.clear()
