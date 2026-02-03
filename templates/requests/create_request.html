@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <h2>Request Resources</h2>
+
+<form method="POST">
+
+    <label>Camp</label>
+    <select name="camp_id" required>
+        {% for c in camps %}
+        <option value="{{ c[0] }}">
+            {{ c[1] }} (Urgency: {{ c[2] }})
+        </option>
+        {% endfor %}
+    </select>
+
+    <label>Item Type</label>
+    <select name="item_type" required>
+        <option value="food">Food</option>
+        <option value="water">Water</option>
+        <option value="medicine-kit">Medicine Kit</option>
+        <option value="other">Other</option>
+    </select>
+
+    <label>Quantity Needed</label>
+    <input type="number" name="quantity_needed" min="1" required>
+
+    <label>Override Priority (optional)</label>
+    <select name="priority">
+        <option value="">Auto (recommended)</option>
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+        <option value="critical">Critical</option>
+    </select>
+
+    <button type="submit">Submit Request</button>
+</form>
+
+<a href="{{ url_for('campBoard') }}">⬅ Back</a>
+
+</body>
+</html>

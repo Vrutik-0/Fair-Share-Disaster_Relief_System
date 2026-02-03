@@ -17,17 +17,22 @@
     
 <h2>Camp Manager Dashboard</h2>
 <p>Welcome, {{ session.name }}</p>
+
 <a href="/camp/add" class="btn"> Add Camp</a><br>
+
 <a href="/camps" class="btn"> View All Camps</a><br>
 <h3>Camp Map</h3>
-
 <div id="map" style="height: 400px; width: 500px;"></div>
-<h3>Warehouse</h3>
+<h3>Requests</h3>
 
+<a href="{{ url_for('create_request') }}" class="btn">
+     New Resource Request
+</a>
+
+<h3>Warehouse</h3>
 <a href="{{ url_for('warehouse_view') }}" class="btn">
      View Warehouse Inventory
 </a>
-
 
 <a href="/logout">Logout</a>
 

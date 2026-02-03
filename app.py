@@ -286,6 +286,63 @@ def add_warehouse_stock():
 
     return render_template("warehouse/add_inventory.html")
 
+@app.route("/requests/new", methods=["GET", "POST"])
+def create_request():
+    if session.get("role") != "camp_manager":
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # get camps managed by this manager
+    cur.execute("""
+        SELECT camp_id, name, urgency_score
+        FROM camps
+        WHERE manager_id = %s
+    """, (session["user_id"],))
+
+    camps = cur.fetchall()
+
+    if request.method == "POST":
+        camp_id = request.form["camp_id"]
+        item_type = request.form["item_type"]
+        quantity = int(request.form["quantity_needed"])
+        priority_override = request.form.get("priority")
+
+        # get urgency score
+        cur.execute(
+            "SELECT urgency_score FROM camps WHERE camp_id = %s",
+            (camp_id,)
+        )
+        urgency = cur.fetchone()[0]
+
+        # auto priority
+        if urgency >= 0.75:
+            auto_priority = "critical"
+        elif urgency >= 0.5:
+            auto_priority = "high"
+        elif urgency >= 0.3:
+            auto_priority = "medium"
+        else:
+            auto_priority = "low"
+
+        priority = priority_override if priority_override else auto_priority
+
+        cur.execute("""
+            INSERT INTO requests
+            (camp_id, item_type, quantity_needed, priority)
+            VALUES (%s, %s, %s, %s)
+        """, (camp_id, item_type, quantity, priority))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return redirect(url_for("campBoard"))
+
+    cur.close()
+    conn.close()
+    return render_template("requests/create_request.html", camps=camps)
 
 
 def calculate_urgency(total_population, injured_population):
