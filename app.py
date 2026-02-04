@@ -3,6 +3,11 @@ from flask import Flask, render_template, request, redirect, url_for ,session
 from werkzeug.security import generate_password_hash, check_password_hash
 from db import get_db_connection
 import os
+from Algo.clustering import cluster_camps
+from Algo.priority import rank_camps
+from Algo.knapsack import knapsack
+from Algo.routes import mst_route
+
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
@@ -659,6 +664,59 @@ def view_my_requests():
     conn.close()
 
     return render_template("requests/my_requests.html", requests=data)
+
+@app.route("/admin/assign-trucks", methods=["POST"])
+def assign_trucks():
+    if session.get("role") != "admin":
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # 1get camps 
+    cur.execute("""
+    SELECT DISTINCT
+        c.camp_id,
+        c.name,
+        c.cord_x,
+        c.cord_y
+        FROM requests r
+        JOIN camps c ON r.camp_id = c.camp_id
+        WHERE r.status IN ('approved', 'partially_approved')
+        """)
+
+
+    rows = cur.fetchall()
+
+    camps = []
+    for r in rows:
+        camps.append({
+            "camp_id": r[0],
+            "name": r[1],
+            "x": float(r[2]),
+            "y": float(r[3])
+        })
+
+    cur.close()
+    conn.close()
+
+    #clustering
+    from Algo.clustering import cluster_camps
+    clusters = cluster_camps(camps, num_trucks=5)
+
+    # Print clusters (for verification)
+    print("\n===== CLUSTER RESULT =====")
+    for cluster_id, cluster_camps_list in clusters.items():
+        print(f"Truck {cluster_id + 1}:")
+        for c in cluster_camps_list:
+            print(f"  Camp {c['camp_id']} - {c['name']} ({c['x']},{c['y']})")
+
+    print("==========================\n")
+
+
+    return redirect(url_for("adminBoard"))
+
+
 
 def auto_approve_logic(request_id, cur):
     # get request info
