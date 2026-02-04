@@ -5,12 +5,25 @@ URGENCY_MULTIPLIER = {
     "low": 1
 }
 
-def rank_camps(camps):
+def compute_priority(camp):
+    """
+    camp must contain:
+    - population
+    - urgency (priority)
+    - current_supply
+    """
+    urgency_weight = URGENCY_MULTIPLIER.get(camp["urgency"], 1)
+    supply = max(camp["current_supply"], 1)
+
+    return (camp["population"] * urgency_weight) / supply
+
+
+def rank_camps_greedy(camps):
+    """
+    camps = list of camp dicts
+    returns camps sorted by priority score (desc)
+    """
     for c in camps:
-        c["priority_score"] = (
-            c["population"] *
-            URGENCY_MULTIPLIER[c["priority"]] /
-            max(c["current_supply"], 1)
-        )
+        c["priority_score"] = compute_priority(c)
 
     return sorted(camps, key=lambda x: x["priority_score"], reverse=True)

@@ -4,7 +4,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from db import get_db_connection
 import os
 from Algo.clustering import cluster_camps
-from Algo.priority import rank_camps
+from Algo.priority import rank_camps_greedy
 from Algo.knapsack import knapsack
 from Algo.routes import mst_route
 
@@ -743,6 +743,89 @@ def assign_trucks():
     print(" Truck assignments persisted successfully")
 
     return redirect(url_for("adminBoard"))
+
+#========================================================================================================
+
+@app.route("/admin/greedy-prioritization", methods=["POST"])
+def greedy_prioritization():
+    if session.get("role") != "admin":
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    #Get trucks
+    cur.execute("""
+        SELECT DISTINCT truck_id
+        FROM truck_assignments
+    """)
+    truck_ids = [r[0] for r in cur.fetchall()]
+
+    from Algo.priority import rank_camps_greedy
+
+    for truck_id in truck_ids:
+
+        # Get camps assigned to this truck
+        cur.execute("""
+             SELECT
+        c.camp_id,
+        (c.total_population + c.injured_population) AS population,
+        c.urgency_score,
+        COALESCE(SUM(a.allocated_quantity), 0) AS current_supply
+    FROM truck_assignments ta
+    JOIN camps c ON ta.camp_id = c.camp_id
+    LEFT JOIN allocations a
+        ON a.request_id IN (
+            SELECT request_id
+            FROM requests
+            WHERE camp_id = c.camp_id
+        )
+    WHERE ta.truck_id = %s
+    GROUP BY
+        c.camp_id,
+        c.total_population,
+        c.injured_population,
+        c.urgency_score
+        """, (truck_id,))
+
+        rows = cur.fetchall()
+
+        camps = []
+        for r in rows:
+            camps.append({
+                "camp_id": r[0],
+                "population": r[1],
+                "urgency": (
+                    "critical" if r[2] >= 0.75 else
+                    "high" if r[2] >= 0.5 else
+                    "medium" if r[2] >= 0.25 else
+                    "low"
+                ),
+                "current_supply": max(r[3], 1)  # avoid divide by zero
+            })
+
+
+        # Greedy sort
+        ordered = rank_camps_greedy(camps)
+
+        # visit order
+        for idx, camp in enumerate(ordered, start=1):
+            cur.execute("""
+                UPDATE truck_assignments
+                SET visit_order = %s
+                WHERE truck_id = %s AND camp_id = %s
+            """, (idx, truck_id, camp["camp_id"]))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    print("Greedy prioritization applied successfully")
+
+    return redirect(url_for("adminBoard"))
+
+
+#==========================================================================================================
 
 
 #----------------------------------------------------------------------------------------------------------
