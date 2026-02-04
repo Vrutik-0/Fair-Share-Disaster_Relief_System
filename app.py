@@ -532,10 +532,13 @@ def discard_request():
     if session.get("role") != "admin":
         return redirect(url_for("login"))
 
+    print("DISCARD FORM DATA:", request.form)
+
     raw_id = request.form.get("request_id", "").strip()
     note = request.form.get("admin_note", "").strip()
 
     if not raw_id.isdigit() or not note:
+        print("INVALID DISCARD INPUT")
         return redirect(url_for("admin_requests"))
 
     request_id = int(raw_id)
@@ -555,7 +558,10 @@ def discard_request():
     cur.close()
     conn.close()
 
+    print("REQUEST DISCARDED:", request_id)
+
     return redirect(url_for("admin_requests"))
+
 
 
 @app.route("/admin/requests/approve-all", methods=["POST"])

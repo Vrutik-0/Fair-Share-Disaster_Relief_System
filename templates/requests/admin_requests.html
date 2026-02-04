@@ -1,13 +1,29 @@
-<h2>Resource Requests</h2>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <h2>Resource Requests</h2>
 <form method="POST" action="{{ url_for('approve_all_requests') }}">
-<table>
+<div>
+
+    <h2>Resource Requests</h2>
+
+<form method="POST" action="{{ url_for('approve_all_requests') }}">
+  <button type="submit"> Approve All</button>
+</form>
+
+<table border="1">
 <tr>
   <th>Camp</th>
   <th>Item</th>
   <th>Requested</th>
   <th>Priority</th>
-  <th>Suggested Allocation</th>
   <th>Approve Qty</th>
+  <th>Actions</th>
 </tr>
 
 {% for r in requests %}
@@ -17,57 +33,28 @@
   <td>{{ r.quantity_needed - r.fulfilled_quantity }}</td>
   <td>{{ r.priority }}</td>
 
-  <td>{{ r.suggested_qty }}</td>
+  <td>
+    <form method="POST" action="{{ url_for('auto_approve_request') }}">
+      <input type="hidden" name="request_id" value="{{ r.request_id }}">
+      <input type="number" name="allocated_quantity" min="0">
+      <button type="submit">Approve</button>
+    </form>
+  </td>
 
   <td>
-    <input type="number"
-           name="alloc_{{ r.request_id }}"
-           value="{{ r.suggested_qty }}"
-           min="0">
+    <form method="POST" action="{{ url_for('discard_request') }}">
+      <input type="hidden" name="request_id" value="{{ r.request_id }}">
+      <input type="text" name="admin_note" placeholder="Reason" required>
+      <button type="submit">Discard</button>
+    </form>
   </td>
+
 </tr>
 {% endfor %}
 </table>
 
-<button type="submit"> Approve All</button>
-</form>
 
+</div>
 
-<table>
-<tr>
-    <th>Camp</th>
-    <th>Item</th>
-    <th>Requested</th>
-    <th>Fulfilled</th>
-    <th>Priority</th>
-    <th>Status</th>
-    <th>Actions</th>
-</tr>
-
-{% for r in requests %}
-<tr>
-    <td>{{ r[1] }}</td>
-    <td>{{ r[2] }}</td>
-    <td>{{ r[3] }}</td>
-    <td>{{ r[4] }}</td>
-    <td>{{ r[5] }}</td>
-    <td>{{ r[6] }}</td>
-    <td>
-
-        <!-- APPROVE -->
-        <form method="POST" action="{{ url_for('auto_approve_request') }}" style="display:inline;">
-            <input type="hidden" name="request_id" value="{{ r[0] }}">
-            <button type="submit">Approve</button>
-        </form>
-
-        <!-- DISCARD -->
-        <form method="POST" action="{{ url_for('discard_request') }}" style="display:inline;">
-            <input type="hidden" name="request_id" value="{{ r[0] }}">
-            <input type="text" name="admin_note" placeholder="Reason" required>
-            <button type="submit">Discard</button>
-        </form>
-
-    </td>
-</tr>
-{% endfor %}
-</table>
+</body>
+</html>
