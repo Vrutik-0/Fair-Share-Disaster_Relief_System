@@ -827,6 +827,102 @@ def greedy_prioritization():
 
 #==========================================================================================================
 
+@app.route("/admin/load-trucks", methods=["POST"])
+def load_trucks():
+    if session.get("role") != "admin":
+        return redirect(url_for("login"))
+
+    ITEM_WEIGHTS = {
+        "food": 1.0,
+        "water": 1.0,
+        "medicine-kit": 0.5
+    }
+
+    from Algo.knapsack import knapsack
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    #Get trucks with assignments
+    cur.execute("""
+        SELECT DISTINCT t.truck_id, t.capacity_kg
+        FROM truck_assignments ta
+        JOIN trucks t ON ta.truck_id = t.truck_id
+    """)
+    trucks = cur.fetchall()
+
+    for truck_id, capacity in trucks:
+
+        # Get allocatable 
+        cur.execute("""
+            SELECT
+                a.allocation_id,
+                r.item_type,
+                a.allocated_quantity,
+                COALESCE(a.item_weight, 0),
+                c.urgency_score
+            FROM allocations a
+            JOIN requests r ON a.request_id = r.request_id
+            JOIN camps c ON r.camp_id = c.camp_id
+            JOIN truck_assignments ta ON ta.camp_id = c.camp_id
+            WHERE ta.truck_id = %s
+              AND a.delivery_status = 'Scheduled'
+        """, (truck_id,))
+
+        rows = cur.fetchall()
+        if not rows:
+            continue
+
+        items = []
+        for r in rows:
+            alloc_id, item_type, qty, custom_weight, urgency = r
+
+            weight = (
+                custom_weight if item_type == "other"
+                else ITEM_WEIGHTS.get(item_type, 1.0) * qty
+            )
+
+            value = int(urgency * 100)  # higher urgency = higher value
+
+            items.append({
+                "allocation_id": alloc_id,
+                "weight": int(weight),
+                "value": value
+            })
+
+        # 0/1 Knapsack
+        selected = knapsack(items, int(capacity))
+
+        # Load selected items
+        total_load = 0
+        for item in selected:
+            total_load += item["weight"]
+
+            cur.execute("""
+                UPDATE allocations
+                SET delivery_status = 'In Transit'
+                WHERE allocation_id = %s
+            """, (item["allocation_id"],))
+
+        # Update truck load and status
+        cur.execute("""
+            UPDATE trucks
+            SET current_load_kg = %s,
+                status = 'loading'
+            WHERE truck_id = %s
+        """, (total_load, truck_id))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    print("Trucks loaded using knapsack optimization")
+
+    return redirect(url_for("adminBoard"))
+
+
+#=============================================================================================================
+
 
 #----------------------------------------------------------------------------------------------------------
 
