@@ -1,0 +1,21 @@
+<h2>My Resource Requests</h2>
+
+<table>
+<tr>
+    <th>Item</th>
+    <th>Requested</th>
+    <th>Fulfilled</th>
+    <th>Status</th>
+    <th>Admin Message</th>
+</tr>
+
+{% for r in requests %}
+<tr>
+    <td>{{ r[0] }}</td>
+    <td>{{ r[1] }}</td>
+    <td>{{ r[2] }}</td>
+    <td>{{ r[3] }}</td>
+    <td>{{ r[4] or '-' }}</td>
+</tr>
+{% endfor %}
+</table>

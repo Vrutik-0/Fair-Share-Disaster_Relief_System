@@ -1,3 +1,4 @@
+from dataclasses import field
 from flask import Flask, render_template, request, redirect, url_for ,session
 from werkzeug.security import generate_password_hash, check_password_hash
 from db import get_db_connection
@@ -343,6 +344,390 @@ def create_request():
     cur.close()
     conn.close()
     return render_template("requests/create_request.html", camps=camps)
+
+@app.route("/admin/requests")
+def admin_requests():
+    if session.get("role") != "admin":
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    #Fetch requests
+    cur.execute("""
+        SELECT
+            r.request_id,
+            c.name AS camp_name,
+            r.item_type,
+            r.quantity_needed,
+            r.fulfilled_quantity,
+            r.priority
+        FROM requests r
+        JOIN camps c ON r.camp_id = c.camp_id
+        WHERE r.status IN ('pending', 'partially_approved')
+        ORDER BY
+            CASE r.priority
+                WHEN 'critical' THEN 1
+                WHEN 'high' THEN 2
+                WHEN 'medium' THEN 3
+                ELSE 4
+            END,
+            r.request_date
+    """)
+
+    rows = cur.fetchall()
+
+    # Convert to list of dicts
+    requests = []
+    for r in rows:
+        requests.append({
+            "request_id": r[0],
+            "camp_name": r[1],
+            "item_type": r[2],
+            "quantity_needed": r[3],
+            "fulfilled_quantity": r[4],
+            "priority": r[5],
+            "suggested_qty": 0 
+        })
+
+    PRIORITY_WEIGHT = {
+        "critical": 4,
+        "high": 3,
+        "medium": 2,
+        "low": 1
+    }
+
+    # group by item type
+    from collections import defaultdict
+    grouped = defaultdict(list)
+
+    for r in requests:
+        grouped[r["item_type"]].append(r)
+
+    for item_type, reqs in grouped.items():
+
+        # get warehouse stock for this item
+        cur.execute(
+            "SELECT quantity FROM warehouse_inventory WHERE item_type = %s",
+            (item_type,)
+        )
+        stock_row = cur.fetchone()
+        stock = stock_row[0] if stock_row else 0
+
+        # compute total weighted demand
+        total_weight = 0
+        for r in reqs:
+            remaining = r["quantity_needed"] - r["fulfilled_quantity"]
+            total_weight += PRIORITY_WEIGHT[r["priority"]] * remaining
+
+        # compute allocation for each request
+        for r in reqs:
+            remaining = r["quantity_needed"] - r["fulfilled_quantity"]
+            if total_weight == 0 or remaining <= 0:
+                r["suggested_qty"] = 0
+            else:
+                weight = PRIORITY_WEIGHT[r["priority"]] * remaining
+                suggested = int(stock * (weight / total_weight))
+                r["suggested_qty"] = min(suggested, remaining)
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "requests/admin_requests.html",
+        requests=requests
+    )
+
+
+@app.route("/admin/requests/approve", methods=["POST"])
+def approve_request():
+    if session.get("role") != "admin":
+        return redirect(url_for("login"))
+
+    request_id = int(request.form["request_id"])
+    approve_qty = int(request.form["allocated_quantity"])
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # get request info
+    cur.execute("""
+        SELECT item_type, quantity_needed, fulfilled_quantity
+        FROM requests
+        WHERE request_id = %s
+    """, (request_id,))
+
+    item_type, needed, fulfilled = cur.fetchone()
+    remaining = needed - fulfilled
+
+    # get warehouse
+    cur.execute("""
+        SELECT quantity
+        FROM warehouse_inventory
+        WHERE item_type = %s
+    """, (item_type,))
+
+    stock = cur.fetchone()[0]
+
+    alloc = min(approve_qty, remaining, stock)
+
+    if alloc <= 0:
+        cur.close()
+        conn.close()
+        return redirect(url_for("admin_requests"))
+
+    # insert allocation
+    cur.execute("""
+        INSERT INTO allocations (request_id, allocated_quantity)
+        VALUES (%s, %s)
+    """, (request_id, alloc))
+
+    # update warehouse
+    cur.execute("""
+        UPDATE warehouse_inventory
+        SET quantity = quantity - %s,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE item_type = %s
+    """, (alloc, item_type))
+
+    # update request
+    new_fulfilled = fulfilled + alloc
+    new_status = (
+        "approved" if new_fulfilled >= needed else "partially_approved"
+    )
+
+    cur.execute("""
+        UPDATE requests
+        SET fulfilled_quantity = %s,
+            status = %s
+        WHERE request_id = %s
+    """, (new_fulfilled, new_status, request_id))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect(url_for("admin_requests"))
+
+@app.route("/admin/requests/auto-approve", methods=["POST"])
+def auto_approve_request():
+    if session.get("role") != "admin":
+        return redirect(url_for("login"))
+
+    request_id = int(request.form["request_id"])
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    auto_approve_logic(request_id, cur)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect(url_for("admin_requests"))
+
+@app.route("/admin/requests/discard", methods=["POST"])
+def discard_request():
+    if session.get("role") != "admin":
+        return redirect(url_for("login"))
+
+    raw_id = request.form.get("request_id", "").strip()
+    note = request.form.get("admin_note", "").strip()
+
+    if not raw_id.isdigit() or not note:
+        return redirect(url_for("admin_requests"))
+
+    request_id = int(raw_id)
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE requests
+        SET status = 'discarded',
+            admin_note = %s,
+            last_updated = CURRENT_TIMESTAMP
+        WHERE request_id = %s
+    """, (note, request_id))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect(url_for("admin_requests"))
+
+
+@app.route("/admin/requests/approve-all", methods=["POST"])
+def approve_all_requests():
+    if session.get("role") != "admin":
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT request_id, item_type, quantity_needed, fulfilled_quantity
+        FROM requests
+        WHERE status IN ('pending', 'partially_approved')
+    """)
+
+    requests = cur.fetchall()
+
+    for r in requests:
+        request_id, item_type, needed, fulfilled = r
+        field = f"alloc_{request_id}"
+        raw_value = request.form.get(field, "").strip()
+        alloc = int(raw_value) if raw_value.isdigit() else 0
+
+
+        if alloc <= 0:
+            continue
+
+        # check warehouse stock
+        cur.execute(
+            "SELECT quantity FROM warehouse_inventory WHERE item_type=%s",
+            (item_type,)
+        )
+        stock = cur.fetchone()[0]
+
+        alloc = min(alloc, stock, needed - fulfilled)
+        if alloc <= 0:
+            continue
+
+        # allocation record
+        cur.execute("""
+            INSERT INTO allocations (request_id, allocated_quantity)
+            VALUES (%s, %s)
+        """, (request_id, alloc))
+
+        # update warehouse
+        cur.execute("""
+            UPDATE warehouse_inventory
+            SET quantity = quantity - %s
+            WHERE item_type = %s
+        """, (alloc, item_type))
+
+        new_fulfilled = fulfilled + alloc
+        new_status = "approved" if new_fulfilled >= needed else "partially_approved"
+
+        cur.execute("""
+            UPDATE requests
+            SET fulfilled_quantity=%s,
+                status=%s,
+                admin_note='Approved in bulk allocation',
+                last_updated=CURRENT_TIMESTAMP
+            WHERE request_id=%s
+        """, (new_fulfilled, new_status, request_id))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect(url_for("admin_requests"))
+
+@app.route("/requests/mine")
+def view_my_requests():
+    if session.get("role") != "camp_manager":
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+    SELECT
+        r.item_type,
+        r.quantity_needed,
+        r.fulfilled_quantity,
+        r.status,
+        r.admin_note
+        FROM requests r
+        JOIN camps c ON r.camp_id = c.camp_id
+        WHERE c.manager_id = %s
+        ORDER BY r.request_date DESC
+        """, (session["user_id"],))
+
+
+    data = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    return render_template("requests/my_requests.html", requests=data)
+
+def auto_approve_logic(request_id, cur):
+    # get request info
+    cur.execute("""
+        SELECT item_type, quantity_needed, fulfilled_quantity, status
+        FROM requests
+        WHERE request_id = %s
+    """, (request_id,))
+
+    row = cur.fetchone()
+    if not row:
+        return
+
+    item_type, needed, fulfilled, current_status = row
+    remaining = needed - fulfilled
+
+    # get warehouse stock
+    cur.execute("""
+        SELECT quantity
+        FROM warehouse_inventory
+        WHERE item_type = %s
+    """, (item_type,))
+
+    stock_row = cur.fetchone()
+    stock = stock_row[0] if stock_row else 0
+
+    # calculate allocation
+    alloc = min(stock, remaining)
+
+    # Empty Stock
+    if alloc <= 0:
+        cur.execute("""
+            UPDATE requests
+            SET status = 'pending',
+                admin_note = 'Insufficient warehouse stock',
+                last_updated = CURRENT_TIMESTAMP
+            WHERE request_id = %s
+        """, (request_id,))
+        return
+    
+    #Parrtial or Full
+
+    # record allocation
+    cur.execute("""
+        INSERT INTO allocations (request_id, allocated_quantity)
+        VALUES (%s, %s)
+    """, (request_id, alloc))
+
+    # update warehouse stock
+    cur.execute("""
+        UPDATE warehouse_inventory
+        SET quantity = quantity - %s,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE item_type = %s
+    """, (alloc, item_type))
+
+    new_fulfilled = fulfilled + alloc
+
+    # determine correct status
+    if new_fulfilled >= needed:
+        new_status = "approved"
+        note = "Request fully approved"
+    else:
+        new_status = "partially_approved"
+        note = "Request partially approved due to limited stock"
+
+    # update request
+    cur.execute("""
+        UPDATE requests
+        SET fulfilled_quantity = %s,
+            status = %s,
+            admin_note = %s,
+            last_updated = CURRENT_TIMESTAMP
+        WHERE request_id = %s
+    """, (new_fulfilled, new_status, note, request_id))
 
 
 def calculate_urgency(total_population, injured_population):
