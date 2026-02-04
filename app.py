@@ -6,7 +6,7 @@ import os
 from Algo.clustering import cluster_camps
 from Algo.priority import rank_camps_greedy
 from Algo.knapsack import knapsack
-from Algo.routes import mst_route
+from Algo.routes import mst_edges
 
 
 app = Flask(__name__)
@@ -919,6 +919,56 @@ def load_trucks():
     print("Trucks loaded using knapsack optimization")
 
     return redirect(url_for("adminBoard"))
+
+
+#=============================================================================================================
+
+@app.route("/api/truck-routes")
+def get_truck_routes():
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # get all trucks with assigned camps
+    cur.execute("""
+        SELECT
+            ta.truck_id,
+            c.camp_id,
+            c.name,
+            c.cord_x,
+            c.cord_y
+        FROM truck_assignments ta
+        JOIN camps c ON ta.camp_id = c.camp_id
+        ORDER BY ta.truck_id
+    """)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    # group camps by truck
+    trucks = {}
+    for r in rows:
+        truck_id = r[0]
+        trucks.setdefault(truck_id, []).append({
+            "camp_id": r[1],
+            "name": r[2],
+            "x": r[3],
+            "y": r[4]
+        })
+
+    from Algo.routes import mst_edges
+
+    routes = []
+    for truck_id, camps in trucks.items():
+        edges = mst_edges(camps)
+
+        for c1, c2 in edges:
+            routes.append({
+                "truck_id": truck_id,
+                "from": [c1["y"], c1["x"]],
+                "to": [c2["y"], c2["x"]]
+            })
+
+    return {"routes": routes}
 
 
 #=============================================================================================================

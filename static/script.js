@@ -121,3 +121,20 @@ function drawGrid(map, step = 100) {
 
     lines.forEach(line => line.addTo(map));
 }
+
+fetch("/api/truck-routes")
+  .then(res => res.json())
+  .then(data => {
+
+    const colors = ["red", "blue", "green", "orange", "purple"];
+
+    data.routes.forEach(r => {
+      const color = colors[r.truck_id % colors.length];
+
+      L.polyline(
+        [r.from, r.to],
+        { color: color, weight: 3 }
+      ).addTo(map);
+    });
+
+  });
