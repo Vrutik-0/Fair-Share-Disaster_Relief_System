@@ -1,26 +1,29 @@
 from sklearn.cluster import KMeans
-import numpy as np
 
-def cluster_camps(camps, num_trucks=5):
+def cluster_camps(camps, trucks):
     """
-    camps = [
-      {"camp_id": 1, "x": 120, "y": 340},
-      ...
-    ]
+    camps: list of dicts {camp_id, x, y}
+    trucks: list of truck_ids
+    returns: {cluster_index: [camp, ...]}
     """
 
     if not camps:
         return {}
 
-    coords = np.array([[c["x"], c["y"]] for c in camps])
+    k = min(len(trucks), max(2, len(camps) // 2))
 
-    k = min(num_trucks, len(camps))
+    points = [[c["x"], c["y"]] for c in camps]
 
-    model = KMeans(n_clusters=k, random_state=42, n_init=10)
-    labels = model.fit_predict(coords)
+    kmeans = KMeans(
+        n_clusters=k,
+        random_state=42,
+        n_init=10
+    )
 
-    clusters = {}
+    labels = kmeans.fit_predict(points)
+
+    clusters = {i: [] for i in range(k)}
     for camp, label in zip(camps, labels):
-        clusters.setdefault(label, []).append(camp)
+        clusters[label].append(camp)
 
     return clusters

@@ -666,7 +666,6 @@ def view_my_requests():
     return render_template("requests/my_requests.html", requests=data)
 
 #----------------------------------------------------------------------------------------------------------
-
 @app.route("/admin/assign-trucks", methods=["POST"])
 def assign_trucks():
     if session.get("role") != "admin":
@@ -675,16 +674,10 @@ def assign_trucks():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # Get camps
+    # 1️⃣ Fetch ALL camps (not filtered)
     cur.execute("""
-        SELECT DISTINCT
-            c.camp_id,
-            c.name,
-            c.cord_x,
-            c.cord_y
-        FROM requests r
-        JOIN camps c ON r.camp_id = c.camp_id
-        WHERE r.status IN ('approved', 'partially_approved')
+        SELECT camp_id, name, cord_x, cord_y
+        FROM camps
     """)
     rows = cur.fetchall()
 
@@ -695,52 +688,42 @@ def assign_trucks():
         "y": float(r[3])
     } for r in rows]
 
-    if not camps:
-        cur.close()
-        conn.close()
-        return redirect(url_for("adminBoard"))
-
-    # clustering
-    from Algo.clustering import cluster_camps
-    clusters = cluster_camps(camps, num_trucks=5)
-
-    # Get available trucks
+    # 2️⃣ Fetch available trucks FIRST (this fixes the error)
     cur.execute("""
         SELECT truck_id
         FROM trucks
         WHERE status = 'available'
         ORDER BY truck_id
-        LIMIT %s
-    """, (len(clusters),))
+    """)
+    trucks = [r[0] for r in cur.fetchall()]
 
-    trucks = [t[0] for t in cur.fetchall()]
-
-    if len(trucks) < len(clusters):
+    if not camps or not trucks:
         cur.close()
         conn.close()
         return redirect(url_for("adminBoard"))
 
-    # clear old assignments
+    # 3️⃣ NOW clustering (Option 3)
+    from Algo.clustering import cluster_camps
+    clusters = cluster_camps(camps, trucks)
+
+    # 4️⃣ Clear old assignments
     cur.execute("DELETE FROM truck_assignments")
 
-    # persist assignments
-    cluster_keys = list(clusters.keys())
+    # 5️⃣ Persist cluster → truck mapping
+    for i, camp_list in clusters.items():
+        truck_id = trucks[i]
 
-    for i, cluster_key in enumerate(cluster_keys):
-        truck_id = trucks[i]   # SAFE mapping
-
-        for camp in clusters[cluster_key]:
+        for camp in camp_list:
             cur.execute("""
                 INSERT INTO truck_assignments (truck_id, camp_id)
                 VALUES (%s, %s)
             """, (truck_id, camp["camp_id"]))
 
-
     conn.commit()
     cur.close()
     conn.close()
 
-    print(" Truck assignments persisted successfully")
+    print("Truck assignments updated (Option 3)")
 
     return redirect(url_for("adminBoard"))
 
