@@ -6,8 +6,12 @@ import os
 from Algo.clustering import cluster_camps
 from Algo.priority import rank_camps_greedy
 from Algo.knapsack import knapsack
-from Algo.routes import mst_edges
+from Algo.routes import greedy_route
 
+
+
+DEPOT_X = 500
+DEPOT_Y = 0
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
@@ -934,14 +938,15 @@ def get_truck_routes():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # get all trucks with assigned camps
+    # Get camps with urgency
     cur.execute("""
         SELECT
             ta.truck_id,
             c.camp_id,
             c.name,
             c.cord_x,
-            c.cord_y
+            c.cord_y,
+            c.urgency_score
         FROM truck_assignments ta
         JOIN camps c ON ta.camp_id = c.camp_id
         ORDER BY ta.truck_id
@@ -950,32 +955,56 @@ def get_truck_routes():
     cur.close()
     conn.close()
 
-    # group camps by truck
+    # Group camps by truck
     trucks = {}
     for r in rows:
         truck_id = r[0]
         trucks.setdefault(truck_id, []).append({
             "camp_id": r[1],
             "name": r[2],
-            "x": r[3],
-            "y": r[4]
+            "x": float(r[3]),
+            "y": float(r[4]),
+            "urgency": float(r[5])
         })
 
-    from Algo.routes import mst_edges
+    depot = {"x": DEPOT_X, "y": DEPOT_Y}
+
+    #GREEDY
+    from Algo.routes import greedy_route
 
     routes = []
-    for truck_id, camps in trucks.items():
-        edges = mst_edges(camps)
 
-        for c1, c2 in edges:
-            routes.append({
-                "truck_id": truck_id,
-                "from": [c1["y"], c1["x"]],
-                "to": [c2["y"], c2["x"]]
-            })
+    # Build greedy route
+    for truck_id, camp_list in trucks.items():
+
+        if not camp_list:
+            continue
+
+        ordered_camps = greedy_route(camp_list, depot)
+        edges = []
+
+        # NGO to first camp
+        first = ordered_camps[0]
+        edges.append([
+            [DEPOT_Y, DEPOT_X],
+            [first["y"], first["x"]]
+        ])
+
+        # Camp to Camp
+        for i in range(len(ordered_camps) - 1):
+            c1 = ordered_camps[i]
+            c2 = ordered_camps[i + 1]
+            edges.append([
+                [c1["y"], c1["x"]],
+                [c2["y"], c2["x"]]
+            ])
+
+        routes.append({
+            "truck_id": truck_id,
+            "edges": edges
+        })
 
     return {"routes": routes}
-
 
 #=============================================================================================================
 
@@ -1029,7 +1058,7 @@ def driver_dashboard():
     """, (truck_id,))
 
     rows = cur.fetchall()
-    
+
     # group deliveries by camp
     camp_deliveries = {}
 
@@ -1231,6 +1260,7 @@ def calculate_urgency(total_population, injured_population):
     )
 
     return round(min(score, 1.0), 2)
+
 
 #Logout
 @app.route("/logout")

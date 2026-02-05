@@ -1,37 +1,34 @@
-import math
-
-def distance(a, b):
-    return math.sqrt((a["x"] - b["x"])**2 + (a["y"] - b["y"])**2)
-
-
-def mst_edges(camps):
+def greedy_route(camps, depot, tol=0.03):
     """
-    camps = [
-      {"camp_id": 1, "x": 150, "y": 200},
-      ...
-    ]
-    returns list of edges [(campA, campB), ...]
+    Urgency-first greedy routing with tolerance grouping.
     """
+    remaining = camps[:]
+    route = []
+    current = depot
 
-    if len(camps) <= 1:
-        return []
+    while remaining:
+        # find max urgency in remain
+        max_urgency = max(c["urgency"] for c in remaining)
 
-    visited = {camps[0]["camp_id"]}
-    edges = []
+        # urgency group
+        urgency_group = [
+            c for c in remaining
+            if abs(c["urgency"] - max_urgency) <= tol
+        ]
 
-    while len(visited) < len(camps):
-        min_edge = None
+        # if only one, take it
+        if len(urgency_group) == 1:
+            next_camp = urgency_group[0]
+        else:
+            # same urgency themn choose closest
+            next_camp = min(
+                urgency_group,
+                key=lambda c: (c["x"] - current["x"])**2 +
+                              (c["y"] - current["y"])**2
+            )
 
-        for c1 in camps:
-            if c1["camp_id"] in visited:
-                for c2 in camps:
-                    if c2["camp_id"] not in visited:
-                        d = distance(c1, c2)
-                        if not min_edge or d < min_edge[0]:
-                            min_edge = (d, c1, c2)
+        route.append(next_camp)
+        remaining.remove(next_camp)
+        current = next_camp
 
-        _, from_camp, to_camp = min_edge
-        visited.add(to_camp["camp_id"])
-        edges.append((from_camp, to_camp))
-
-    return edges
+    return route

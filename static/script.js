@@ -128,19 +128,20 @@ fetch("/api/truck-routes")
 
     const colors = ["red", "blue", "green", "orange", "purple"];
 
-    data.routes.forEach(r => {
-      const color = colors[r.truck_id % colors.length];
+    data.routes.forEach(route => {
+      const color = colors[route.truck_id % colors.length];
 
-      L.polyline(
-        [r.from, r.to],
-        { color: color, weight: 3 }
-      ).addTo(map);
+      route.edges.forEach(edge => {
+        L.polyline(edge, {
+          color: color,
+          weight: 3
+        }).addTo(map);
+      });
     });
 
   });
 
-
-  if (document.getElementById("map")) {
+if (document.getElementById("map")) {
   const map = L.map("map", {
     crs: L.CRS.Simple,
     minZoom: -1
@@ -166,3 +167,11 @@ fetch("/api/truck-routes")
       });
     });
 }
+
+route.edges.forEach((edge, idx) => {
+  L.polyline(edge, { color, weight: 3 }).addTo(map);
+
+  if (idx === 0) {
+    L.marker(edge[1]).bindTooltip(`Stop ${idx+1}`).addTo(map);
+  }
+});

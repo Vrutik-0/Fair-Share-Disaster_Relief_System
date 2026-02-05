@@ -221,7 +221,7 @@ JOIN truck_assignments ta ON ta.camp_id = r.camp_id
 WHERE a.request_id = r.request_id
 AND a.truck_id IS NULL;
 
-SELECT truck_number, current_load_kg, status FROM trucks;
+SELECT truck_id, truck_number, current_load_kg, status ,driver_id FROM trucks;
 
 DELETE FROM truck_assignments;
 
@@ -232,3 +232,15 @@ SELECT camp_id, name FROM camps;
 SELECT DISTINCT c.camp_id, c.name FROM requests r JOIN camps c ON r.camp_id = c.camp_id WHERE r.status IN 
 ('approved', 'partially_approved');
 
+SELECT id, name, role FROM users WHERE role = 'driver';
+
+INSERT INTO users (name, email, password, role)
+VALUES
+('Driver2', 'd2@test.com', 'pass', 'driver'),
+('Driver3', 'd3@test.com', 'pass', 'driver'),
+('Driver4', 'd4@test.com', 'pass', 'driver'),
+('Driver5', 'd5@test.com', 'pass', 'driver');
+
+SELECT truck_number, driver_id
+FROM trucks
+ORDER BY truck_id;
