@@ -4,30 +4,211 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-
-    <link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-    <title>Document</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <title>Driver Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .status-badge { 
+            padding: 4px 8px; 
+            border-radius: 4px; 
+            font-size: 12px; 
+            font-weight: bold;
+        }
+        .status-in_transit { background-color: #fff3cd; color: #856404; }
+        .status-available { background-color: #d4edda; color: #155724; }
+        .status-loading { background-color: #cce5ff; color: #004085; }
+        .camp-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            background: #f9f9f9;
+        }
+        .camp-card.delivered { background: #d4edda; opacity: 0.7; }
+        .camp-header { display: flex; justify-content: space-between; align-items: center; }
+        .stop-number {
+            background: #007bff;
+            color: white;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .urgency-high { border-left: 4px solid red; }
+        .urgency-medium { border-left: 4px solid orange; }
+        .urgency-low { border-left: 4px solid green; }
+        .items-table { width: 100%; margin-top: 10px; }
+        .items-table th, .items-table td { padding: 5px; text-align: left; }
+        .btn { padding: 10px 20px; cursor: pointer; border: none; border-radius: 4px; }
+        .btn-deliver { background-color: #28a745; color: white; }
+        .btn-deliver:disabled { background-color: #ccc; cursor: not-allowed; }
+        #map { height: 400px; width: 100%; max-width: 600px; border: 2px solid #333; }
+        .flash-success { background-color: #d4edda; color: #155724; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .flash-warning { background-color: #fff3cd; color: #856404; padding: 10px; margin: 10px 0; border-radius: 4px; }
+    </style>
 </head>
 <body>
-    
-<h2>Driver Dashboard</h2>
-<p>Welcome, {{ session.name }}</p>
+    <h2>🚚 Driver Dashboard</h2>
+    <p>Welcome, <strong>{{ session['name'] }}</strong></p>
 
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 
-<a href="/camps" class="btn"> View All Camps</a><br>
+    {% if truck_number %}
+        <div style="margin: 15px 0;">
+            <strong>Assigned Truck:</strong> {{ truck_number }}
+            <span class="status-badge status-{{ truck_status }}">{{ truck_status or 'N/A' }}</span>
+        </div>
+    {% else %}
+        <p style="color: orange;">⚠️ No truck assigned to you yet.</p>
+    {% endif %}
 
-<h3>Camp Map</h3>
+    <h3>📍 Route Map</h3>
+    <div id="map"></div>
+    <p><em>🔵 Blue = NGO/Warehouse (Start) | 🔴 Red = Camp Stops (in order)</em></p>
 
-<div id="map" style="height: 400px; width: 500px;"></div>
+    <h3>📦 Delivery Route (in order)</h3>
 
-<a href="/logout">Logout</a>
+    {% if camps %}
+        {% for camp in camps %}
+        <div class="camp-card {% if camp.is_delivered %}delivered{% endif %} 
+                    {% if camp.urgency >= 0.7 %}urgency-high{% elif camp.urgency >= 0.4 %}urgency-medium{% else %}urgency-low{% endif %}">
+            
+            <div class="camp-header">
+                <div>
+                    <span class="stop-number">{{ camp.visit_order or loop.index }}</span>
+                    <strong style="font-size: 18px; margin-left: 10px;">{{ camp.name }}</strong>
+                    <span style="color: gray; font-size: 12px;">(Urgency: {{ "%.2f"|format(camp.urgency) }})</span>
+                </div>
+                
+                {% if not camp.is_delivered and camp.delivery_items %}
+                <form method="POST" action="{{ url_for('mark_camp_delivered', camp_id=camp.camp_id) }}">
+                    <button type="submit" class="btn btn-deliver">✓ Mark Delivered</button>
+                </form>
+                {% elif camp.is_delivered %}
+                    <span style="color: green; font-weight: bold;">✓ Delivered</span>
+                {% endif %}
+            </div>
 
-<script src="/static/script.js"></script>
+            {% if camp.delivery_items %}
+            <table class="items-table">
+                <tr>
+                    <th>Item</th>
+                    <th>Quantity</th>
+                </tr>
+                {% for item in camp.delivery_items %}
+                <tr>
+                    <td>{{ item.type }}</td>
+                    <td>{{ item.quantity }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% else %}
+                <p style="color: gray; font-style: italic;">No pending deliveries for this camp.</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+        <p>No deliveries assigned to your route.</p>
+    {% endif %}
 
+    <br>
+    <a href="{{ url_for('logout') }}">🚪 Logout</a>
+
+    <script>
+        // Initialize map
+        const map = L.map("map", {
+            crs: L.CRS.Simple,
+            minZoom: -1
+        });
+
+        const bounds = [[0, 0], [1000, 1000]];
+        map.fitBounds(bounds);
+
+        // Draw boundary
+        L.rectangle(bounds, {
+            color: "#333",
+            weight: 2,
+            fill: false
+        }).addTo(map);
+
+        // Draw grid
+        function drawGrid(step = 100) {
+            for (let x = 0; x <= 1000; x += step) {
+                L.polyline([[0, x], [1000, x]], {
+                    color: "#ddd",
+                    weight: 1,
+                    opacity: 0.5
+                }).addTo(map);
+            }
+            for (let y = 0; y <= 1000; y += step) {
+                L.polyline([[y, 0], [y, 1000]], {
+                    color: "#ddd",
+                    weight: 1,
+                    opacity: 0.5
+                }).addTo(map);
+            }
+        }
+        drawGrid(100);
+
+        // Fetch and draw route
+        fetch("/api/driver-route")
+            .then(res => res.json())
+            .then(data => {
+                if (!data.points || data.points.length === 0) {
+                    console.log("No route data");
+                    return;
+                }
+
+                // Draw route line
+                L.polyline(data.points, {
+                    color: "blue",
+                    weight: 4,
+                    opacity: 0.8
+                }).addTo(map);
+
+                // Draw markers
+                data.points.forEach((p, i) => {
+                    const isDepot = i === 0;
+                    
+                    L.circleMarker(p, {
+                        radius: isDepot ? 10 : 8,
+                        color: isDepot ? "blue" : "red",
+                        fillColor: isDepot ? "blue" : "red",
+                        fillOpacity: 0.9
+                    }).addTo(map).bindTooltip(
+                        isDepot ? "🏭 NGO / Warehouse" : `Stop ${i}: ${data.camps[i-1]?.name || 'Camp'}`,
+                        { permanent: false }
+                    );
+                });
+
+                // Add direction arrows
+                if (data.points.length >= 2) {
+                    for (let i = 0; i < data.points.length - 1; i++) {
+                        const from = data.points[i];
+                        const to = data.points[i + 1];
+                        const midY = (from[0] + to[0]) / 2;
+                        const midX = (from[1] + to[1]) / 2;
+                        
+                        L.circleMarker([midY, midX], {
+                            radius: 4,
+                            color: "green",
+                            fillColor: "green",
+                            fillOpacity: 1
+                        }).addTo(map).bindTooltip(`→ ${i + 1}`, { permanent: true, direction: 'center', className: 'arrow-label' });
+                    }
+                }
+            })
+            .catch(err => console.error("Error loading route:", err));
+    </script>
 </body>
 </html>

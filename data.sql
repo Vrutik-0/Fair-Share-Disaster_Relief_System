@@ -220,27 +220,24 @@ FROM requests r
 JOIN truck_assignments ta ON ta.camp_id = r.camp_id
 WHERE a.request_id = r.request_id
 AND a.truck_id IS NULL;
+----------------------------------------------------------------------------------------------------------
 
-SELECT truck_id, truck_number, current_load_kg, status ,driver_id FROM trucks;
+CREATE TABLE system_state (
+    id SERIAL PRIMARY KEY,
+    is_execution_live BOOLEAN DEFAULT FALSE,
+    executed_at TIMESTAMP
+);
 
-DELETE FROM truck_assignments;
+INSERT INTO system_state (is_execution_live) VALUES (FALSE);
 
-SELECT truck_id, COUNT(*) FROM truck_assignments GROUP BY truck_id;
+----------------------------------------------------------------------------------------------------------
 
-SELECT camp_id, name FROM camps;
-
-SELECT DISTINCT c.camp_id, c.name FROM requests r JOIN camps c ON r.camp_id = c.camp_id WHERE r.status IN 
-('approved', 'partially_approved');
-
-SELECT id, name, role FROM users WHERE role = 'driver';
-
-INSERT INTO users (name, email, password, role)
-VALUES
-('Driver2', 'd2@test.com', 'pass', 'driver'),
-('Driver3', 'd3@test.com', 'pass', 'driver'),
-('Driver4', 'd4@test.com', 'pass', 'driver'),
-('Driver5', 'd5@test.com', 'pass', 'driver');
-
-SELECT truck_number, driver_id
-FROM trucks
-ORDER BY truck_id;
+SELECT
+    a.allocation_id,
+    a.truck_id,
+    r.camp_id,
+    t.truck_number,
+    t.driver_id
+FROM allocations a
+JOIN requests r ON a.request_id = r.request_id
+JOIN trucks t ON a.truck_id = t.truck_id;

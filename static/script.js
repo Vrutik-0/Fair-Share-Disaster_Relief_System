@@ -1,20 +1,27 @@
+// ==========================================
+// Fair-Share V1 - Main JavaScript
+// ==========================================
+
+// ==========================================
+// URGENCY PREVIEW (for add_camp.html)
+// ==========================================
 const totalPop = document.querySelector('input[name="total_population"]');
 const injuredPop = document.querySelector('input[name="injured_population"]');
 const preview = document.getElementById("urgencyPreview");
 
 function updateUrgency() {
-    const t = parseInt(totalPop.value || 0);
-    const i = parseInt(injuredPop.value || 0);
+    const t = parseInt(totalPop?.value || 0);
+    const i = parseInt(injuredPop?.value || 0);
 
     if (t === 0) {
-        preview.innerText = "Urgency Score: 0.00";
+        if (preview) preview.innerText = "Urgency Score: 0.00";
         return;
     }
 
     let score = (i / t) * 0.7 + (t / 1000) * 0.3;
     score = Math.min(score, 1).toFixed(2);
 
-    preview.innerText = `Urgency Score (auto): ${score}`;
+    if (preview) preview.innerText = `Urgency Score (auto): ${score}`;
 }
 
 if (totalPop && injuredPop) {
@@ -22,55 +29,197 @@ if (totalPop && injuredPop) {
     injuredPop.addEventListener("input", updateUrgency);
 }
 
-let mapInitialized = false;
-let map;
-let markers = [];
+// ==========================================
+// ADMIN MAP (for admin dashboard - view_camps.html)
+// ==========================================
+let adminMap = null;
+let campMarkers = [];
 
-function getColor(urgency) {
+function getUrgencyColor(urgency) {
     if (urgency >= 0.7) return "red";
     if (urgency >= 0.4) return "orange";
     return "green";
 }
 
-async function loadCampsOnMap() {
-    const res = await fetch("/api/camps");
-    const data = await res.json();
+function initAdminMap() {
+    const mapElement = document.getElementById("admin-map");
+    if (!mapElement || adminMap) return;
 
-    // clear old markers
-    markers.forEach(m => map.removeLayer(m));
-    markers = [];
-
-    data.camps.forEach(camp => {
-        const marker = L.circleMarker(
-            [camp.lat, camp.lng],
-            {
-                radius: 8,
-                color: getColor(camp.urgency),
-                fillColor: getColor(camp.urgency),
-                fillOpacity: 0.8
-            }
-        ).addTo(map);
-
-        //For Click Expandable Dots
-        /*marker.bindPopup(`
-            <b>${camp.name}</b><br>
-            Urgency: ${camp.urgency}<br>
-            X: ${camp.lat}, Y: ${camp.lng}
-        `);*/
-
-        //For Hover Expandable Dots
-        marker.bindTooltip(`
-            <b>${camp.name}</b><br>
-            Urgency: ${camp.urgency}<br>
-            X: ${camp.lat}, Y: ${camp.lng}
-        `);
-
-        markers.push(marker);
+    adminMap = L.map("admin-map", {
+        crs: L.CRS.Simple,
+        minZoom: -2
     });
+
+    const bounds = [[0, 0], [1000, 1000]];
+    adminMap.fitBounds(bounds);
+
+    // Boundary box
+    L.rectangle(bounds, {
+        color: "#5f5f5f",
+        weight: 2,
+        fill: false
+    }).addTo(adminMap);
+
+    // Grid
+    drawGrid(adminMap, 100);
+
+    // NGO/Warehouse marker
+    L.circleMarker([0, 500], {
+        radius: 12,
+        color: "blue",
+        fillColor: "blue",
+        fillOpacity: 0.9
+    }).addTo(adminMap).bindTooltip("🏭 NGO / Warehouse", { permanent: true });
+
+    // Load camps
+    loadCampsOnAdminMap();
+
+    // Load truck routes
+    loadTruckRoutes();
 }
 
-if (document.getElementById("map")) {
-    map = L.map("map", {
+async function loadCampsOnAdminMap() {
+    if (!adminMap) return;
+
+    try {
+        const res = await fetch("/api/camps");
+        const data = await res.json();
+
+        // Clear old markers
+        campMarkers.forEach(m => adminMap.removeLayer(m));
+        campMarkers = [];
+
+        data.camps.forEach(camp => {
+            const marker = L.circleMarker(
+                [camp.lat, camp.lng],
+                {
+                    radius: 8,
+                    color: getUrgencyColor(camp.urgency),
+                    fillColor: getUrgencyColor(camp.urgency),
+                    fillOpacity: 0.8
+                }
+            ).addTo(adminMap);
+
+            marker.bindTooltip(`
+                <b>${camp.name}</b><br>
+                Urgency: ${camp.urgency}<br>
+                Position: (${camp.lat}, ${camp.lng})
+            `);
+
+            campMarkers.push(marker);
+        });
+    } catch (err) {
+        console.error("Error loading camps:", err);
+    }
+}
+
+async function loadTruckRoutes() {
+    if (!adminMap) return;
+
+    try {
+        const res = await fetch("/api/truck-routes");
+        const data = await res.json();
+
+        const colors = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c"];
+
+        console.log("Truck routes loaded:", data.routes.length, "routes");
+
+        data.routes.forEach((route, idx) => {
+            const color = colors[idx % colors.length];
+            
+            console.log(`Route ${idx}: Truck ${route.truck_id}, ${route.camps.length} camps, ${route.edges.length} edges`);
+
+            // Draw route line using route_points if available
+            if (route.route_points && route.route_points.length > 1) {
+                L.polyline(route.route_points, {
+                    color: color,
+                    weight: 4,
+                    opacity: 0.8
+                }).addTo(adminMap);
+            } else {
+                // Fallback to drawing edges
+                route.edges.forEach((edge) => {
+                    L.polyline(edge, {
+                        color: color,
+                        weight: 4,
+                        opacity: 0.8
+                    }).addTo(adminMap);
+                });
+            }
+
+            // Add numbered markers for each camp stop
+            route.camps.forEach((camp, stopIdx) => {
+                const y = camp.y;
+                const x = camp.x;
+                
+                // Draw stop marker with number
+                L.circleMarker([y, x], {
+                    radius: 12,
+                    color: color,
+                    fillColor: "white",
+                    fillOpacity: 0.9,
+                    weight: 3
+                }).addTo(adminMap).bindTooltip(
+                    `<b>Truck ${route.truck_id} - Stop ${stopIdx + 1}</b><br>${camp.name}<br>Urgency: ${camp.urgency?.toFixed(2) || 'N/A'}`,
+                    { permanent: false }
+                );
+                
+                // Add stop number text
+                L.marker([y, x], {
+                    icon: L.divIcon({
+                        className: 'stop-number-icon',
+                        html: `<div style="background:${color};color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:12px;">${stopIdx + 1}</div>`,
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                    })
+                }).addTo(adminMap);
+            });
+        });
+    } catch (err) {
+        console.error("Error loading truck routes:", err);
+    }
+}
+
+function drawGrid(map, step = 100) {
+    // Vertical lines
+    for (let x = 0; x <= 1000; x += step) {
+        L.polyline([[0, x], [1000, x]], {
+            color: "#b6b6b6",
+            weight: 1,
+            opacity: 0.4,
+            interactive: false
+        }).addTo(map);
+    }
+
+    // Horizontal lines
+    for (let y = 0; y <= 1000; y += step) {
+        L.polyline([[y, 0], [y, 1000]], {
+            color: "#b6b6b6",
+            weight: 1,
+            opacity: 0.4,
+            interactive: false
+        }).addTo(map);
+    }
+}
+
+// Initialize admin map if element exists
+if (document.getElementById("admin-map")) {
+    initAdminMap();
+    // Refresh camps every 5 seconds
+    setInterval(loadCampsOnAdminMap, 5000);
+}
+
+// ==========================================
+// GENERAL MAP (for view_camps.html)
+// ==========================================
+function initGeneralMap() {
+    const mapElement = document.getElementById("map");
+    if (!mapElement) return;
+
+    // Check if this is the driver page (has different initialization)
+    if (document.body.classList.contains('driver-page')) return;
+
+    const map = L.map("map", {
         crs: L.CRS.Simple,
         minZoom: -2
     });
@@ -78,100 +227,75 @@ if (document.getElementById("map")) {
     const bounds = [[0, 0], [1000, 1000]];
     map.fitBounds(bounds);
 
-    // boundary box
     L.rectangle(bounds, {
         color: "#5f5f5f",
         weight: 2,
         fill: false
     }).addTo(map);
 
-    drawGrid(map, 50); //grid units
+    drawGrid(map, 100);
 
-    loadCampsOnMap();
-    setInterval(loadCampsOnMap, 3000);
-}
-
-
-function drawGrid(map, step = 100) {
-    const lines = [];
-
-    //vertical line
-    for (let x = 0; x <= 1000; x += step) {
-        lines.push(
-            L.polyline([[0, x], [1000, x]], {
-                color: "#b6b6b6",
-                weight: 1,
-                opacity: 0.6,
-                interactive: false
-            })
-        );
-    }
-
-    //horizontal line
-    for (let y = 0; y <= 1000; y += step) {
-        lines.push(
-            L.polyline([[y, 0], [y, 1000]], {
-                color: "#b6b6b6",
-                weight: 1,
-                opacity: 0.6,
-                interactive: false
-            })
-        );
-    }
-
-    lines.forEach(line => line.addTo(map));
-}
-
-fetch("/api/truck-routes")
-  .then(res => res.json())
-  .then(data => {
-
-    const colors = ["red", "blue", "green", "orange", "purple"];
-
-    data.routes.forEach(route => {
-      const color = colors[route.truck_id % colors.length];
-
-      route.edges.forEach(edge => {
-        L.polyline(edge, {
-          color: color,
-          weight: 3
-        }).addTo(map);
-      });
-    });
-
-  });
-
-if (document.getElementById("map")) {
-  const map = L.map("map", {
-    crs: L.CRS.Simple,
-    minZoom: -1
-  }).setView([500, 500], 0);
-
-  L.rectangle([[0,0],[1000,1000]], {color:"#ccc", weight:1}).addTo(map);
-
-  fetch("/api/driver-route")
-    .then(res => res.json())
-    .then(data => {
-      if (!data.points || data.points.length === 0) return;
-
-      L.polyline(data.points, {
+    // NGO marker
+    L.circleMarker([0, 500], {
+        radius: 12,
         color: "blue",
-        weight: 4
-      }).addTo(map);
+        fillColor: "blue",
+        fillOpacity: 0.9
+    }).addTo(map).bindTooltip("🏭 NGO / Warehouse", { permanent: true });
 
-      data.points.forEach(p => {
-        L.circleMarker(p, {
-          radius: 6,
-          color: "blue"
-        }).addTo(map);
-      });
-    });
+    // Load camps
+    fetch("/api/camps")
+        .then(res => res.json())
+        .then(data => {
+            data.camps.forEach(camp => {
+                L.circleMarker([camp.lat, camp.lng], {
+                    radius: 8,
+                    color: getUrgencyColor(camp.urgency),
+                    fillColor: getUrgencyColor(camp.urgency),
+                    fillOpacity: 0.8
+                }).addTo(map).bindTooltip(`
+                    <b>${camp.name}</b><br>
+                    Urgency: ${camp.urgency}
+                `);
+            });
+        });
+
+    // Load routes
+    fetch("/api/truck-routes")
+        .then(res => res.json())
+        .then(data => {
+            const colors = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6"];
+            
+            data.routes.forEach((route, idx) => {
+                const color = colors[idx % colors.length];
+                
+                route.edges.forEach(edge => {
+                    L.polyline(edge, {
+                        color: color,
+                        weight: 3
+                    }).addTo(map);
+                });
+            });
+        });
 }
 
-route.edges.forEach((edge, idx) => {
-  L.polyline(edge, { color, weight: 3 }).addTo(map);
+// Only init general map if not on driver page and admin-map doesn't exist
+if (document.getElementById("map") && !document.getElementById("admin-map")) {
+    // Check if we're not on driver dashboard (driver has its own script)
+    const isDriverPage = window.location.pathname.includes('/driver');
+    if (!isDriverPage) {
+        initGeneralMap();
+    }
+}
 
-  if (idx === 0) {
-    L.marker(edge[1]).bindTooltip(`Stop ${idx+1}`).addTo(map);
-  }
+// ==========================================
+// FLASH MESSAGES AUTO-HIDE
+// ==========================================
+document.querySelectorAll('.flash-success, .flash-warning, .flash-error').forEach(el => {
+    setTimeout(() => {
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 500);
+    }, 5000);
 });
+
+console.log("Fair-Share V1 - Script loaded successfully");

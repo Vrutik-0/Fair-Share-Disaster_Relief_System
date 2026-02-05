@@ -4,72 +4,104 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-
-    <link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-    <title>Document</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <title>Admin Dashboard</title>
+    <style>
+        .flash-success { background-color: #d4edda; color: #155724; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .flash-warning { background-color: #fff3cd; color: #856404; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .flash-error { background-color: #f8d7da; color: #721c24; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .workflow-step { 
+            display: inline-block; 
+            padding: 10px 20px; 
+            margin: 5px; 
+            background: #3498db; 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+        }
+        .workflow-step:hover { background: #2980b9; }
+        .execute-btn { background: #c0392b !important; }
+        .execute-btn:hover { background: #a93226 !important; }
+        #admin-map { height: 500px; width: 100%; max-width: 800px; border: 2px solid #333; margin: 10px 0; }
+        .legend { padding: 10px; background: white; border: 1px solid #ccc; margin: 10px 0; display: inline-block; }
+        .legend-item { display: inline-block; margin-right: 15px; }
+        .legend-color { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; }
+    </style>
 </head>
-
 <body>
+    <h2>📊 Admin Dashboard</h2>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 
-   <h2>Admin Dashboard</h2>
-
-<div class="card-container">
-
-    <div class="card">
-        <h3>Total Camps</h3>
-        <p>{{ total_camps }}</p>
+    <div class="card-container">
+        <div class="card">
+            <h3>Total Camps</h3>
+            <p>{{ total_camps }}</p>
+        </div>
+        <div class="card critical">
+            <h3>Critical Camps</h3>
+            <p>{{ critical_camps }}</p>
+        </div>
+        <div class="card moderate">
+            <h3>Moderate Camps</h3>
+            <p>{{ moderate_camps }}</p>
+        </div>
+        <div class="card avg">
+            <h3>Avg Urgency</h3>
+            <p>{{ avg_urgency }}</p>
+        </div>
     </div>
 
-    <div class="card critical">
-        <h3>Critical Camps</h3>
-        <p>{{ critical_camps }}</p>
+    <h3>🗺️ Camp & Route Map</h3>
+    <div class="legend">
+        <span class="legend-item"><span class="legend-color" style="background:blue;"></span> NGO/Warehouse</span>
+        <span class="legend-item"><span class="legend-color" style="background:red;"></span> Critical (≥0.7)</span>
+        <span class="legend-item"><span class="legend-color" style="background:orange;"></span> Moderate (0.4-0.7)</span>
+        <span class="legend-item"><span class="legend-color" style="background:green;"></span> Low (&lt;0.4)</span>
     </div>
+    <div id="admin-map"></div>
 
-    <div class="card moderate">
-        <h3>Moderate Camps</h3>
-        <p>{{ moderate_camps }}</p>
-    </div>
+    <h3>📋 Management</h3>
+    <a href="/camps" class="btn">📍 View All Camps</a>
+    <a href="{{ url_for('warehouse_view') }}" class="btn">🏭 View Warehouse</a>
+    <a href="{{ url_for('admin_requests') }}" class="btn">📝 View Resource Requests</a>
 
-    <div class="card avg">
-        <h3>Avg Urgency</h3>
-        <p>{{ avg_urgency }}</p>
-    </div>
+    <h3>🚚 Delivery Workflow</h3>
+    <p><em>Execute these steps in order:</em></p>
 
-</div>
+    <form method="POST" action="{{ url_for('assign_trucks') }}" style="display:inline;">
+        <button class="workflow-step">1️⃣ Cluster & Assign Trucks</button>
+    </form>
 
-<a href="/camps" class="btn"> View All Camps</a>
-<h3>Camp Map</h3>
-<div id="map" style="height: 400px; width: 500px;"></div>
-<h3>Warehouse Management</h3>
+    <form method="POST" action="{{ url_for('greedy_prioritization') }}" style="display:inline;">
+        <button class="workflow-step">2️⃣ Prioritize Routes (Greedy)</button>
+    </form>
 
-<a href="{{ url_for('warehouse_view') }}" class="btn">
-     View Warehouse
-</a>
+    <form method="POST" action="{{ url_for('load_trucks') }}" style="display:inline;">
+        <button class="workflow-step">3️⃣ Load Trucks (Knapsack)</button>
+    </form>
 
-<a href="{{ url_for('admin_requests') }}" class="btn">
-     View Resource Requests
-</a>
+    <form method="POST" action="{{ url_for('execute_delivery_plan') }}" style="display:inline;"
+          onsubmit="return confirm('This will start deliveries and lock planning. Continue?');">
+        <button class="workflow-step execute-btn">4️⃣ Execute Delivery Plan</button>
+    </form>
 
-<form method="POST" action="{{ url_for('assign_trucks') }}">
-    <button class="btn"> Assign Trucks</button>
-</form>
+    <form method="POST" action="{{ url_for('reset_execution') }}" style="display:inline; margin-left: 20px;"
+          onsubmit="return confirm('This will reset all truck assignments and unlock the system. Continue?');">
+        <button class="workflow-step" style="background: #6c757d;">🔄 Reset System</button>
+    </form>
 
-<form method="POST" action="{{ url_for('greedy_prioritization') }}">
-    <button class="btn"> Apply Greedy Prioritization</button>
-</form>
+    <br><br>
+    <a href="/logout">🚪 Logout</a>
 
-<form method="POST" action="{{ url_for('load_trucks') }}">
-    <button class="btn"> Load Trucks (Knapsack)</button>
-</form>
-
-
-<a href="/logout">Logout</a>
-
-<script src="/static/script.js"></script>
+    <script src="/static/script.js"></script>
 </body>
 </html>

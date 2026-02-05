@@ -3,58 +3,174 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Admin Requests</title>
+    <style>
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f4f4f4; }
+        .btn { padding: 8px 16px; cursor: pointer; margin: 2px; border-radius: 4px; }
+        .btn-approve { background-color: #4CAF50; color: white; border: none; }
+        .btn-discard { background-color: #f44336; color: white; border: none; }
+        .btn-approve-all { background-color: #2196F3; color: white; border: none; padding: 12px 24px; font-size: 16px; }
+        input[type="number"] { width: 80px; padding: 5px; }
+        input[type="text"] { padding: 5px; width: 120px; }
+        .flash-success { background-color: #d4edda; color: #155724; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .flash-error { background-color: #f8d7da; color: #721c24; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .priority-critical { color: #dc3545; font-weight: bold; }
+        .priority-high { color: #fd7e14; font-weight: bold; }
+        .priority-medium { color: #007bff; }
+        .priority-low { color: #6c757d; }
+        .discard-form { display: none; margin-top: 5px; }
+    </style>
 </head>
 <body>
-    <h2>Resource Requests</h2>
-<form method="POST" action="{{ url_for('approve_all_requests') }}">
-<div>
+    <h2>📝 Resource Requests</h2>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 
-    <h2>Resource Requests</h2>
-
-<form method="POST" action="{{ url_for('approve_all_requests') }}">
-  <button type="submit"> Approve All</button>
-</form>
-
-<table border="1">
-<tr>
-  <th>Camp</th>
-  <th>Item</th>
-  <th>Requested</th>
-  <th>Priority</th>
-  <th>Approve Qty</th>
-  <th>Actions</th>
-</tr>
-
-{% for r in requests %}
-<tr>
-  <td>{{ r.camp_name }}</td>
-  <td>{{ r.item_type }}</td>
-  <td>{{ r.quantity_needed - r.fulfilled_quantity }}</td>
-  <td>{{ r.priority }}</td>
-
-  <td>
-    <form method="POST" action="{{ url_for('auto_approve_request') }}">
-      <input type="hidden" name="request_id" value="{{ r.request_id }}">
-      <input type="number" name="allocated_quantity" min="0">
-      <button type="submit">Approve</button>
+    {% if requests %}
+    <!-- Single form for Approve All -->
+    <form method="POST" action="{{ url_for('approve_all_requests') }}" id="approveAllForm">
+        <button type="submit" class="btn btn-approve-all">✓ Approve All (with quantities below)</button>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Camp</th>
+                    <th>Item</th>
+                    <th>Remaining</th>
+                    <th>Priority</th>
+                    <th>Suggested</th>
+                    <th>Approve Qty</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in requests %}
+                <tr>
+                    <td>{{ r.camp_name }}</td>
+                    <td>{{ r.item_type }}</td>
+                    <td>{{ r.quantity_needed - r.fulfilled_quantity }}</td>
+                    <td><span class="priority-{{ r.priority }}">{{ r.priority }}</span></td>
+                    <td>{{ r.suggested_qty }}</td>
+                    <td>
+                        <input type="number" 
+                               name="alloc_{{ r.request_id }}" 
+                               value="{{ r.suggested_qty }}" 
+                               min="0" 
+                               max="{{ r.quantity_needed - r.fulfilled_quantity }}"
+                               data-request-id="{{ r.request_id }}">
+                    </td>
+                    <td>
+                        <button type="button" class="btn btn-approve" 
+                                data-request-id="{{ r.request_id }}">
+                            Approve
+                        </button>
+                        
+                        <button type="button" class="btn btn-discard"
+                                data-request-id="{{ r.request_id }}"
+                                data-action="toggle-discard">
+                            Discard
+                        </button>
+                        
+                        <div class="discard-form" id="discard-form-{{ r.request_id }}">
+                            <input type="text" 
+                                   id="note-{{ r.request_id }}" 
+                                   placeholder="Reason" 
+                                   required>
+                            <button type="button" class="btn btn-discard" 
+                                    data-request-id="{{ r.request_id }}"
+                                    data-action="confirm-discard">
+                                Confirm
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </form>
-  </td>
+    {% else %}
+    <p>No pending requests.</p>
+    {% endif %}
 
-  <td>
-    <form method="POST" action="{{ url_for('discard_request') }}">
-      <input type="hidden" name="request_id" value="{{ r.request_id }}">
-      <input type="text" name="admin_note" placeholder="Reason" required>
-      <button type="submit">Discard</button>
-    </form>
-  </td>
+    <br>
+    <a href="{{ url_for('adminBoard') }}">← Back to Dashboard</a>
 
-</tr>
-{% endfor %}
-</table>
-
-
-</div>
-
+    <script>
+        // Individual approve
+        document.querySelectorAll('.btn-approve').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var requestId = this.getAttribute('data-request-id');
+                var qty = document.querySelector('input[name="alloc_' + requestId + '"]').value;
+                
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '{{ url_for("approve_request") }}';
+                
+                var idInput = document.createElement('input');
+                idInput.type = 'hidden';
+                idInput.name = 'request_id';
+                idInput.value = requestId;
+                form.appendChild(idInput);
+                
+                var qtyInput = document.createElement('input');
+                qtyInput.type = 'hidden';
+                qtyInput.name = 'allocated_quantity';
+                qtyInput.value = qty;
+                form.appendChild(qtyInput);
+                
+                document.body.appendChild(form);
+                form.submit();
+            });
+        });
+        
+        // Toggle discard form
+        document.querySelectorAll('[data-action="toggle-discard"]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var requestId = this.getAttribute('data-request-id');
+                var div = document.getElementById('discard-form-' + requestId);
+                div.style.display = div.style.display === 'none' ? 'block' : 'none';
+            });
+        });
+        
+        // Confirm discard
+        document.querySelectorAll('[data-action="confirm-discard"]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var requestId = this.getAttribute('data-request-id');
+                var note = document.getElementById('note-' + requestId).value;
+                
+                if (!note.trim()) {
+                    alert('Please provide a reason for discarding');
+                    return;
+                }
+                
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '{{ url_for("discard_request") }}';
+                
+                var idInput = document.createElement('input');
+                idInput.type = 'hidden';
+                idInput.name = 'request_id';
+                idInput.value = requestId;
+                form.appendChild(idInput);
+                
+                var noteInput = document.createElement('input');
+                noteInput.type = 'hidden';
+                noteInput.name = 'admin_note';
+                noteInput.value = note;
+                form.appendChild(noteInput);
+                
+                document.body.appendChild(form);
+                form.submit();
+            });
+        });
+    </script>
 </body>
 </html>

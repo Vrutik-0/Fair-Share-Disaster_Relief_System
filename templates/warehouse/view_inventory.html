@@ -1,6 +1,6 @@
 <h2>Central Warehouse Inventory</h2>
 
-{% if session.role == 'admin' %}
+{% if session['role'] == 'admin' %}
 <a href="/warehouse/add" class="btn">Add Stock</a>
 {% endif %}
 

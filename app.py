@@ -1,17 +1,120 @@
-from dataclasses import field
-from flask import Flask, render_template, request, redirect, url_for ,session
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from db import get_db_connection
 import os
+from collections import defaultdict
 from Algo.clustering import cluster_camps
 from Algo.priority import rank_camps_greedy
 from Algo.knapsack import knapsack
 from Algo.routes import greedy_route
 
 
-
+#NGO Base Coord
 DEPOT_X = 500
 DEPOT_Y = 0
+
+
+def auto_approve_logic(request_id, cur):
+    # get request info
+    cur.execute("""
+        SELECT item_type, quantity_needed, fulfilled_quantity, status
+        FROM requests
+        WHERE request_id = %s
+    """, (request_id,))
+
+    row = cur.fetchone()
+    if not row:
+        return
+
+    item_type, needed, fulfilled, current_status = row
+    
+    # Don't process if already approved, delivered, or discarded
+    if current_status not in ('pending', 'partially_approved'):
+        return
+    
+    remaining = needed - fulfilled
+
+    # get warehouse stock
+    cur.execute("""
+        SELECT quantity
+        FROM warehouse_inventory
+        WHERE item_type = %s
+    """, (item_type,))
+
+    stock_row = cur.fetchone()
+    stock = stock_row[0] if stock_row else 0
+
+    # calculate allocation
+    alloc = min(stock, remaining)
+
+    # Empty Stock
+    if alloc <= 0:
+        cur.execute("""
+            UPDATE requests
+            SET status = 'pending',
+                admin_note = 'Insufficient warehouse stock',
+                last_updated = CURRENT_TIMESTAMP
+            WHERE request_id = %s
+        """, (request_id,))
+        return
+    
+    # Partial or Full
+
+    # record allocation
+    cur.execute("""
+        INSERT INTO allocations (request_id, allocated_quantity)
+        VALUES (%s, %s)
+    """, (request_id, alloc))
+
+    # update warehouse stock
+    cur.execute("""
+        UPDATE warehouse_inventory
+        SET quantity = quantity - %s,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE item_type = %s
+    """, (alloc, item_type))
+
+    new_fulfilled = fulfilled + alloc
+
+    # determine correct status
+    if new_fulfilled >= needed:
+        new_status = "approved"
+        note = "Request fully approved"
+    else:
+        new_status = "partially_approved"
+        note = "Request partially approved due to limited stock"
+
+    # update request
+    cur.execute("""
+        UPDATE requests
+        SET fulfilled_quantity = %s,
+            status = %s,
+            admin_note = %s,
+            last_updated = CURRENT_TIMESTAMP
+        WHERE request_id = %s
+    """, (new_fulfilled, new_status, note, request_id))
+
+
+def calculate_urgency(total_population, injured_population):
+    if total_population == 0:
+        return 0.0
+
+    score = (
+        (injured_population / total_population) * 0.7
+        + (total_population / 1000) * 0.3
+    )
+
+    return round(min(score, 1.0), 2)
+
+def execution_locked():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT is_execution_live FROM system_state WHERE id = 1")
+    locked = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    return locked
+
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
@@ -33,17 +136,26 @@ def signup():
         conn = get_db_connection()
         cur = conn.cursor()
 
-        cur.execute(
-            """
-            INSERT INTO users (name, email, phone, role, password)
-            VALUES (%s, %s, %s, %s, %s)
-            """,
-            (name, email, phone, role, password)
-        )
+        try:
+            cur.execute(
+                """
+                INSERT INTO users (name, email, phone, role, password)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (name, email, phone, role, password)
+            )
 
-        conn.commit()
-        cur.close()
-        conn.close()
+            conn.commit()
+            flash("Account created successfully! Please login.", "success")
+            
+        except Exception as e:
+            conn.rollback()
+            flash(f"Registration failed: {str(e)}", "error")
+            return render_template("signup.html")
+            
+        finally:
+            cur.close()
+            conn.close()
 
         return redirect(url_for("login"))
 
@@ -58,26 +170,34 @@ def login():
 
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("SELECT id, password, role, name FROM users WHERE email = %s", (email,))
-        user = cur.fetchone()
-        cur.close()
-        conn.close()
+        
+        try:
+            cur.execute("SELECT id, password, role, name FROM users WHERE email = %s", (email,))
+            user = cur.fetchone()
+            
+            if user and check_password_hash(user[1], password):
+                session["user_id"] = user[0]
+                session["role"] = user[2]
+                session["name"] = user[3]
 
-        if user and check_password_hash(user[1], password):
-            session["user_id"] = user[0]
-            session["role"] = user[2]
-            session["name"] = user[3]
-
-            if user[2] == "admin":
-                return redirect(url_for("adminBoard"))
-            elif user[2] == "camp_manager":
-                return redirect(url_for("campBoard"))
-            elif user[2] == "driver":
-                return redirect(url_for("driverBoard"))
-            else:
-                return "Invalid role"
-
-        return "Invalid credentials"
+                if user[2] == "admin":
+                    return redirect(url_for("adminBoard"))
+                elif user[2] == "camp_manager":
+                    return redirect(url_for("campBoard"))
+                elif user[2] == "driver":
+                    return redirect(url_for("driver_dashboard"))
+                else:
+                    flash("Invalid role", "error")
+                    return redirect(url_for("login"))
+            
+            flash("Invalid email or password", "error")
+            
+        except Exception as e:
+            flash(f"Login error: {str(e)}", "error")
+            
+        finally:
+            cur.close()
+            conn.close()
 
     return render_template("login.html")
 
@@ -117,12 +237,6 @@ def campBoard():
         return redirect(url_for("login"))
     return render_template("dashboard/camp_manager.html")
 
-
-@app.route("/driver/dashboard")
-def driverBoard():
-    if session.get("role") != "driver":
-        return redirect(url_for("login"))
-    return render_template("dashboard/driver.html")
 
 @app.route("/camps")
 def view_camps():
@@ -224,8 +338,10 @@ def api_camps():
     for r in rows:
         camps.append({
             "name": r[0],
-            "lat": r[1],   # cord_x → latitude
-            "lng": r[2],   # cord_y → longitude
+            "x": r[1],   # cord_x
+            "y": r[2],   # cord_y  
+            "lat": r[2], # For Leaflet: lat = cord_y (vertical)
+            "lng": r[1], # For Leaflet: lng = cord_x (horizontal)
             "urgency": r[3]
         })
 
@@ -385,11 +501,12 @@ def admin_requests():
     """)
 
     rows = cur.fetchall()
+    print(f"ADMIN REQUESTS - Found {len(rows)} pending requests")
 
     # Convert to list of dicts
-    requests = []
+    pending_reqs = []
     for r in rows:
-        requests.append({
+        pending_reqs.append({
             "request_id": r[0],
             "camp_name": r[1],
             "item_type": r[2],
@@ -407,10 +524,9 @@ def admin_requests():
     }
 
     # group by item type
-    from collections import defaultdict
     grouped = defaultdict(list)
 
-    for r in requests:
+    for r in pending_reqs:
         grouped[r["item_type"]].append(r)
 
     for item_type, reqs in grouped.items():
@@ -422,6 +538,7 @@ def admin_requests():
         )
         stock_row = cur.fetchone()
         stock = stock_row[0] if stock_row else 0
+        print(f"  Item type '{item_type}': stock={stock}")
 
         # compute total weighted demand
         total_weight = 0
@@ -438,13 +555,14 @@ def admin_requests():
                 weight = PRIORITY_WEIGHT[r["priority"]] * remaining
                 suggested = int(stock * (weight / total_weight))
                 r["suggested_qty"] = min(suggested, remaining)
+            print(f"    Request {r['request_id']}: suggested_qty={r['suggested_qty']}")
 
     cur.close()
     conn.close()
 
     return render_template(
         "requests/admin_requests.html",
-        requests=requests
+        requests=pending_reqs
     )
 
 
@@ -578,66 +696,97 @@ def approve_all_requests():
     if session.get("role") != "admin":
         return redirect(url_for("login"))
 
+    print("APPROVE ALL - Form data:", dict(request.form))
+
     conn = get_db_connection()
     cur = conn.cursor()
 
+    # Get all pending/partially approved requests
     cur.execute("""
         SELECT request_id, item_type, quantity_needed, fulfilled_quantity
         FROM requests
         WHERE status IN ('pending', 'partially_approved')
     """)
 
-    requests = cur.fetchall()
+    pending_requests = cur.fetchall()
+    print(f"APPROVE ALL - Found {len(pending_requests)} pending requests")
+    
+    approved_count = 0
+    total_allocated = 0
 
-    for r in requests:
+    for r in pending_requests:
         request_id, item_type, needed, fulfilled = r
         field = f"alloc_{request_id}"
-        raw_value = request.form.get(field, "").strip()
-        alloc = int(raw_value) if raw_value.isdigit() else 0
-
+        raw_value = request.form.get(field, "0").strip()
+        
+        print(f"  Request {request_id}: field={field}, raw_value='{raw_value}'")
+        
+        # Parse allocation amount - handle empty or non-numeric values
+        try:
+            alloc = int(raw_value) if raw_value else 0
+        except ValueError:
+            alloc = 0
 
         if alloc <= 0:
+            print(f"    Skipping - alloc={alloc}")
             continue
 
-        # check warehouse stock
+        # Check warehouse stock
         cur.execute(
             "SELECT quantity FROM warehouse_inventory WHERE item_type=%s",
             (item_type,)
         )
-        stock = cur.fetchone()[0]
+        stock_row = cur.fetchone()
+        stock = stock_row[0] if stock_row else 0
 
-        alloc = min(alloc, stock, needed - fulfilled)
-        if alloc <= 0:
+        # Calculate actual allocation (limited by stock and remaining need)
+        remaining = needed - fulfilled
+        actual_alloc = min(alloc, stock, remaining)
+        
+        if actual_alloc <= 0:
             continue
 
-        # allocation record
+        # Create allocation record
         cur.execute("""
             INSERT INTO allocations (request_id, allocated_quantity)
             VALUES (%s, %s)
-        """, (request_id, alloc))
+        """, (request_id, actual_alloc))
 
-        # update warehouse
+        # Update warehouse stock
         cur.execute("""
             UPDATE warehouse_inventory
-            SET quantity = quantity - %s
+            SET quantity = quantity - %s,
+                updated_at = CURRENT_TIMESTAMP
             WHERE item_type = %s
-        """, (alloc, item_type))
+        """, (actual_alloc, item_type))
 
-        new_fulfilled = fulfilled + alloc
+        # Update request status
+        new_fulfilled = fulfilled + actual_alloc
         new_status = "approved" if new_fulfilled >= needed else "partially_approved"
 
         cur.execute("""
             UPDATE requests
-            SET fulfilled_quantity=%s,
-                status=%s,
-                admin_note='Approved in bulk allocation',
-                last_updated=CURRENT_TIMESTAMP
-            WHERE request_id=%s
+            SET fulfilled_quantity = %s,
+                status = %s,
+                admin_note = 'Approved in bulk allocation',
+                last_updated = CURRENT_TIMESTAMP
+            WHERE request_id = %s
         """, (new_fulfilled, new_status, request_id))
+        
+        print(f"    ALLOCATED: request_id={request_id}, qty={actual_alloc}, status={new_status}")
+        approved_count += 1
+        total_allocated += actual_alloc
 
     conn.commit()
     cur.close()
     conn.close()
+
+    print(f"APPROVE ALL COMPLETE: {approved_count} requests, {total_allocated} units")
+
+    if approved_count > 0:
+        flash(f"Successfully approved {approved_count} requests (total: {total_allocated} units)", "success")
+    else:
+        flash("No requests were approved. Check quantities and stock.", "warning")
 
     return redirect(url_for("admin_requests"))
 
@@ -678,10 +827,13 @@ def assign_trucks():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # Fetch ALL camps
+    # Fetch only camps that have APPROVED allocations with 'scheduled' status
     cur.execute("""
-        SELECT camp_id, name, cord_x, cord_y
-        FROM camps
+        SELECT DISTINCT c.camp_id, c.name, c.cord_x, c.cord_y
+        FROM camps c
+        JOIN requests r ON r.camp_id = c.camp_id
+        JOIN allocations a ON a.request_id = r.request_id
+        WHERE a.delivery_status = 'scheduled'
     """)
     rows = cur.fetchall()
 
@@ -692,7 +844,7 @@ def assign_trucks():
         "y": float(r[3])
     } for r in rows]
 
-    #Fetch available truck
+    # Fetch available trucks
     cur.execute("""
         SELECT truck_id
         FROM trucks
@@ -702,6 +854,7 @@ def assign_trucks():
     trucks = [r[0] for r in cur.fetchall()]
 
     if not camps or not trucks:
+        flash("No camps with scheduled deliveries or no available trucks.", "warning")
         cur.close()
         conn.close()
         return redirect(url_for("adminBoard"))
@@ -709,47 +862,55 @@ def assign_trucks():
     #clustering
     from Algo.clustering import cluster_camps
     clusters = cluster_camps(camps, trucks)
+    
+    print(f"ASSIGN TRUCKS - Camps with scheduled deliveries: {len(camps)}")
+    print(f"ASSIGN TRUCKS - Available trucks: {trucks}")
+    print(f"ASSIGN TRUCKS - Clusters created: {len(clusters)}")
+    for cluster_idx, camp_list in clusters.items():
+        print(f"  Cluster {cluster_idx}: {len(camp_list)} camps - {[c['name'] for c in camp_list]}")
 
     #Clear old assignments
     cur.execute("DELETE FROM truck_assignments")
 
     # truck mapping
+    assigned_truck_ids = []
     for i, camp_list in clusters.items():
+        if i >= len(trucks):
+            print(f"  WARNING: Cluster {i} but only {len(trucks)} trucks available!")
+            continue
         truck_id = trucks[i]
+        assigned_truck_ids.append(truck_id)
+        print(f"  Assigning truck {truck_id} to cluster {i} ({len(camp_list)} camps)")
 
         for camp in camp_list:
             cur.execute("""
                 INSERT INTO truck_assignments (truck_id, camp_id)
                 VALUES (%s, %s)
             """, (truck_id, camp["camp_id"]))
-        # Assign available drivers to trucks
+    
+    # Assign available drivers to the trucks we just assigned
     cur.execute("""
         SELECT id FROM users
         WHERE role = 'driver'
-        AND id NOT IN ( SELECT driver_id FROM trucks WHERE driver_id IS NOT NULL )
         ORDER BY id """)
-    available_drivers = [r[0] for r in cur.fetchall()]
+    all_drivers = [r[0] for r in cur.fetchall()]
 
-    cur.execute("""
-        SELECT truck_id
-        FROM trucks
-        WHERE status = 'available'
-        AND driver_id IS NULL
-        ORDER BY truck_id """)
-    available_trucks = [r[0] for r in cur.fetchall()]
-
-    for truck_id, driver_id in zip(available_trucks, available_drivers):
-        cur.execute("""
-            UPDATE trucks
-            SET driver_id = %s
-            WHERE truck_id = %s
-        """, (driver_id, truck_id))
-
+    # Assign drivers to the trucks that have camp assignments
+    for idx, truck_id in enumerate(assigned_truck_ids):
+        if idx < len(all_drivers):
+            driver_id = all_drivers[idx]
+            cur.execute("""
+                UPDATE trucks
+                SET driver_id = %s
+                WHERE truck_id = %s
+            """, (driver_id, truck_id))
+            print(f"Assigned driver {driver_id} to truck {truck_id}")
 
     conn.commit()
     cur.close()
     conn.close()
 
+    flash(f"Assigned {len(clusters)} trucks to {len(camps)} camps across {len(clusters)} clusters.", "success")
     print("Truck assignments updated")
 
     return redirect(url_for("adminBoard"))
@@ -830,6 +991,7 @@ def greedy_prioritization():
     cur.close()
     conn.close()
 
+    flash("Greedy prioritization applied - camps ordered by urgency within each cluster.", "success")
     print("Greedy prioritization applied successfully")
 
     return redirect(url_for("adminBoard"))
@@ -876,7 +1038,7 @@ def load_trucks():
             JOIN camps c ON r.camp_id = c.camp_id
             JOIN truck_assignments ta ON ta.camp_id = c.camp_id
             WHERE ta.truck_id = %s
-              AND a.delivery_status = 'Scheduled'
+              AND a.delivery_status = 'scheduled'
         """, (truck_id,))
 
         rows = cur.fetchall()
@@ -910,9 +1072,10 @@ def load_trucks():
 
             cur.execute("""
                 UPDATE allocations
-                SET delivery_status = 'In Transit'
+                SET delivery_status = 'in_transit',
+                    truck_id = %s
                 WHERE allocation_id = %s
-            """, (item["allocation_id"],))
+            """, (truck_id, item["allocation_id"],))
 
         # Update truck load and status
         cur.execute("""
@@ -926,6 +1089,7 @@ def load_trucks():
     cur.close()
     conn.close()
 
+    flash("Trucks loaded using knapsack optimization - ready for execution.", "success")
     print("Trucks loaded using knapsack optimization")
 
     return redirect(url_for("adminBoard"))
@@ -938,7 +1102,7 @@ def get_truck_routes():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # Get camps with urgency
+    # Get camps with urgency, ordered by visit_order
     cur.execute("""
         SELECT
             ta.truck_id,
@@ -946,65 +1110,126 @@ def get_truck_routes():
             c.name,
             c.cord_x,
             c.cord_y,
-            c.urgency_score
+            c.urgency_score,
+            ta.visit_order
         FROM truck_assignments ta
         JOIN camps c ON ta.camp_id = c.camp_id
-        ORDER BY ta.truck_id
+        ORDER BY ta.truck_id, ta.visit_order NULLS LAST, c.urgency_score DESC
     """)
     rows = cur.fetchall()
     cur.close()
     conn.close()
 
-    # Group camps by truck
+    # Group camps by truck (already ordered by visit_order)
     trucks = {}
     for r in rows:
         truck_id = r[0]
-        trucks.setdefault(truck_id, []).append({
+        if truck_id not in trucks:
+            trucks[truck_id] = []
+        trucks[truck_id].append({
             "camp_id": r[1],
             "name": r[2],
             "x": float(r[3]),
             "y": float(r[4]),
-            "urgency": float(r[5])
+            "urgency": float(r[5]),
+            "visit_order": r[6]
         })
 
     depot = {"x": DEPOT_X, "y": DEPOT_Y}
 
-    #GREEDY
-    from Algo.routes import greedy_route
-
     routes = []
 
-    # Build greedy route
+    # Build routes - camps are already in visit_order from SQL
     for truck_id, camp_list in trucks.items():
-
         if not camp_list:
             continue
 
-        ordered_camps = greedy_route(camp_list, depot)
         edges = []
-
-        # NGO to first camp
-        first = ordered_camps[0]
-        edges.append([
-            [DEPOT_Y, DEPOT_X],
-            [first["y"], first["x"]]
-        ])
-
-        # Camp to Camp
-        for i in range(len(ordered_camps) - 1):
-            c1 = ordered_camps[i]
-            c2 = ordered_camps[i + 1]
-            edges.append([
-                [c1["y"], c1["x"]],
-                [c2["y"], c2["x"]]
-            ])
+        
+        # Build a single polyline from depot through all camps
+        # Format: [[depot], [camp1], [camp2], ...]
+        route_points = [[DEPOT_Y, DEPOT_X]]  # Start with depot [y, x] for Leaflet
+        
+        for camp in camp_list:
+            route_points.append([camp["y"], camp["x"]])
+        
+        # Create edges for each segment
+        for i in range(len(route_points) - 1):
+            edges.append([route_points[i], route_points[i + 1]])
 
         routes.append({
             "truck_id": truck_id,
-            "edges": edges
+            "edges": edges,
+            "route_points": route_points,  # Full polyline for easier drawing
+            "camps": [{"name": c["name"], "urgency": c["urgency"], "order": c["visit_order"], "x": c["x"], "y": c["y"]} for c in camp_list]
         })
+    
+    print(f"TRUCK ROUTES: {len(routes)} routes generated")
+    for r in routes:
+        print(f"  Truck {r['truck_id']}: {len(r['camps'])} camps, {len(r['edges'])} edges")
+        for c in r['camps']:
+            print(f"    Camp '{c['name']}': x={c['x']}, y={c['y']}")
 
-    return {"routes": routes}
+    return {"routes": routes, "depot": {"x": DEPOT_X, "y": DEPOT_Y}}
+
+#=============================================================================================================
+
+@app.route("/admin/execute-plan", methods=["POST"])
+def execute_delivery_plan():
+    if session.get("role") != "admin":
+        return redirect(url_for("login"))
+
+    # Check if execution is already live
+    if execution_locked():
+        flash("Delivery plan is already being executed!", "warning")
+        return redirect(url_for("adminBoard"))
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # Check if there are any trucks ready (with in_transit allocations from load_trucks)
+    cur.execute("""
+        SELECT COUNT(DISTINCT truck_id)
+        FROM allocations
+        WHERE delivery_status = 'in_transit'
+          AND truck_id IS NOT NULL
+    """)
+    ready_count = cur.fetchone()[0]
+    
+    if ready_count == 0:
+        flash("No trucks are loaded. Please complete steps 1-3 first.", "warning")
+        cur.close()
+        conn.close()
+        return redirect(url_for("adminBoard"))
+
+    # Update truck status to in_transit
+    cur.execute("""
+        UPDATE trucks
+        SET status = 'in_transit'
+        WHERE truck_id IN (
+            SELECT DISTINCT truck_id
+            FROM allocations
+            WHERE delivery_status = 'in_transit'
+              AND truck_id IS NOT NULL
+        )
+    """)
+
+    # Set execution lock
+    cur.execute("""
+        UPDATE system_state
+        SET is_execution_live = TRUE,
+            executed_at = CURRENT_TIMESTAMP
+        WHERE id = 1
+    """)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    flash("Delivery plan executed! Trucks are now in transit.", "success")
+    return redirect(url_for("adminBoard"))
+
+
 
 #=============================================================================================================
 
@@ -1021,9 +1246,9 @@ def driver_dashboard():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # Get driver's truck
+    # 1️⃣ Get driver's truck
     cur.execute("""
-        SELECT truck_id, truck_number
+        SELECT truck_id, truck_number, status
         FROM trucks
         WHERE driver_id = %s
     """, (driver_id,))
@@ -1032,59 +1257,100 @@ def driver_dashboard():
     if not truck:
         cur.close()
         conn.close()
-        return render_template(
-            "dashboard/driver.html",
-            truck_number=None,
-            camp_deliveries={}
-        )
+        return render_template("dashboard/driver.html", 
+                               deliveries=[], 
+                               camps=[],
+                               truck_number=None,
+                               truck_status=None)
 
-    truck_id, truck_number = truck
+    truck_id, truck_number, truck_status = truck
 
-    #Get delivery details per camp
+    # 2️⃣ Get assigned camps with visit order and their deliveries
     cur.execute("""
-        SELECT
+        SELECT 
             c.camp_id,
-            c.name,
-            ta.visit_order,
-            r.item_type,
-            a.allocated_quantity
+            c.name AS camp_name,
+            c.cord_x,
+            c.cord_y,
+            c.urgency_score,
+            ta.visit_order
         FROM truck_assignments ta
         JOIN camps c ON ta.camp_id = c.camp_id
-        JOIN requests r ON r.camp_id = c.camp_id
-        JOIN allocations a ON a.request_id = r.request_id
+        WHERE ta.truck_id = %s
+        ORDER BY ta.visit_order NULLS LAST, c.urgency_score DESC
+    """, (truck_id,))
+    
+    camps_data = cur.fetchall()
+    
+    # 3️⃣ Build camps list with their deliveries
+    camps = []
+    for camp_row in camps_data:
+        camp_id, camp_name, cord_x, cord_y, urgency, visit_order = camp_row
+        
+        # Get deliveries for this camp - check both via truck_id and via truck_assignments
+        cur.execute("""
+            SELECT 
+                r.item_type,
+                a.allocated_quantity,
+                a.delivery_status
+            FROM allocations a
+            JOIN requests r ON a.request_id = r.request_id
+            WHERE r.camp_id = %s 
+              AND (a.truck_id = %s OR a.truck_id IS NULL)
+              AND a.delivery_status != 'delivered'
+            ORDER BY r.item_type
+        """, (camp_id, truck_id))
+        
+        items = cur.fetchall()
+        
+        # Check if all items for this camp are delivered
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM allocations a
+            JOIN requests r ON a.request_id = r.request_id
+            WHERE r.camp_id = %s 
+              AND (a.truck_id = %s OR a.truck_id IS NULL)
+              AND a.delivery_status != 'delivered'
+        """, (camp_id, truck_id))
+        pending_count = cur.fetchone()[0]
+        
+        camps.append({
+            "camp_id": camp_id,
+            "name": camp_name,
+            "cord_x": cord_x,
+            "cord_y": cord_y,
+            "urgency": urgency,
+            "visit_order": visit_order or 0,
+            "delivery_items": [{"type": i[0], "quantity": i[1], "status": i[2]} for i in items],
+            "is_delivered": pending_count == 0 and len(items) == 0
+        })
+    
+    # 4️⃣ Also get flat deliveries list for backward compatibility
+    cur.execute("""
+        SELECT
+            c.name AS camp_name,
+            r.item_type,
+            a.allocated_quantity
+        FROM allocations a
+        JOIN requests r ON a.request_id = r.request_id
+        JOIN camps c ON r.camp_id = c.camp_id
+        JOIN truck_assignments ta ON ta.camp_id = c.camp_id AND ta.truck_id = a.truck_id
         WHERE a.truck_id = %s
-          AND a.delivery_status IN ('scheduled', 'in_transit')
-        ORDER BY ta.visit_order
+          AND a.delivery_status != 'delivered'
+        ORDER BY ta.visit_order NULLS LAST, c.name, r.item_type
     """, (truck_id,))
 
-    rows = cur.fetchall()
-
-    # group deliveries by camp
-    camp_deliveries = {}
-
-    for r in rows:
-        camp_id, camp_name, order, item_type, qty = r
-
-        if camp_id not in camp_deliveries:
-            camp_deliveries[camp_id] = {
-                "camp_id": camp_id,
-                "name": camp_name,
-                "order": order,
-                "items": []
-            }
-
-        camp_deliveries[camp_id]["items"].append({
-            "item": item_type,
-            "qty": qty
-        })
+    deliveries = cur.fetchall()
 
     cur.close()
     conn.close()
 
     return render_template(
         "dashboard/driver.html",
+        deliveries=deliveries,
+        camps=camps,
         truck_number=truck_number,
-        camp_deliveries=camp_deliveries
+        truck_status=truck_status
     )
 
 
@@ -1093,32 +1359,70 @@ def driver_dashboard():
 @app.route("/api/driver-route")
 def driver_route():
     if session.get("role") != "driver":
-        return {"routes": []}
+        return {"points": [], "camps": []}
 
     driver_id = session.get("user_id")
 
     conn = get_db_connection()
     cur = conn.cursor()
 
+    # Get driver's truck
+    cur.execute("""
+        SELECT truck_id
+        FROM trucks
+        WHERE driver_id = %s
+    """, (driver_id,))
+    truck_row = cur.fetchone()
+    
+    if not truck_row:
+        cur.close()
+        conn.close()
+        return {"points": [], "camps": []}
+    
+    truck_id = truck_row[0]
+
+    # Get camps in visit order
     cur.execute("""
         SELECT
-            c.cord_y,
+            c.camp_id,
+            c.name,
             c.cord_x,
+            c.cord_y,
+            c.urgency_score,
             ta.visit_order
-        FROM trucks t
-        JOIN truck_assignments ta ON ta.truck_id = t.truck_id
+        FROM truck_assignments ta
         JOIN camps c ON ta.camp_id = c.camp_id
-        WHERE t.driver_id = %s
-        ORDER BY ta.visit_order
-    """, (driver_id,))
+        WHERE ta.truck_id = %s
+        ORDER BY ta.visit_order NULLS LAST, c.urgency_score DESC
+    """, (truck_id,))
 
-    points = cur.fetchall()
+    camps = cur.fetchall()
     cur.close()
     conn.close()
 
+    # Build route starting from NGO depot
+    # Format: [y, x] for Leaflet (lat, lng)
+    points = [[DEPOT_Y, DEPOT_X]]  # NGO/Warehouse at (500, 0)
+    
+    camp_info = []
+    for idx, camp in enumerate(camps):
+        camp_id, name, cord_x, cord_y, urgency, visit_order = camp
+        points.append([cord_y, cord_x])  # [y, x] for Leaflet
+        camp_info.append({
+            "camp_id": camp_id,
+            "name": name,
+            "x": cord_x,
+            "y": cord_y,
+            "urgency": urgency,
+            "stop_number": idx + 1
+        })
+
     return {
-        "points": [[p[0], p[1]] for p in points]
+        "points": points,
+        "camps": camp_info,
+        "depot": {"x": DEPOT_X, "y": DEPOT_Y}
     }
+
 
 @app.route("/driver/delivered", methods=["POST"])
 def mark_delivered():
@@ -1145,29 +1449,94 @@ def mark_delivered():
 
     return redirect(url_for("driver_dashboard"))
 
-@app.route("/driver/deliver/<int:camp_id>", methods=["POST"])
+@app.route("/driver/mark-camp-delivered/<int:camp_id>", methods=["POST"])
 def mark_camp_delivered(camp_id):
     if session.get("role") != "driver":
         return redirect(url_for("login"))
 
     driver_id = session.get("user_id")
-    print("LOGGED IN USER ID:", driver_id)
-
 
     conn = get_db_connection()
     cur = conn.cursor()
 
+    # 1️⃣ Get driver's truck
     cur.execute("""
-        UPDATE allocations
+        SELECT truck_id
+        FROM trucks
+        WHERE driver_id = %s
+    """, (driver_id,))
+    row = cur.fetchone()
+
+    if not row:
+        cur.close()
+        conn.close()
+        return redirect(url_for("driver_dashboard"))
+
+    truck_id = row[0]
+
+    # 2️⃣ Mark allocations for THIS camp as delivered
+    cur.execute("""
+        UPDATE allocations a
         SET delivery_status = 'delivered',
             delivery_datetime = CURRENT_TIMESTAMP
-        WHERE truck_id = (
-            SELECT truck_id FROM trucks WHERE driver_id = %s
-        )
-        AND request_id IN (
-            SELECT request_id FROM requests WHERE camp_id = %s
-        )
-    """, (driver_id, camp_id))
+        FROM requests r
+        WHERE a.request_id = r.request_id
+          AND r.camp_id = %s
+          AND a.truck_id = %s
+    """, (camp_id, truck_id))
+
+    # 3️⃣ Update request status
+    cur.execute("""
+        UPDATE requests
+        SET status = 'delivered',
+            last_updated = CURRENT_TIMESTAMP
+        WHERE camp_id = %s
+          AND request_id IN (
+              SELECT request_id
+              FROM allocations
+              WHERE truck_id = %s
+                AND delivery_status = 'delivered'
+          )
+    """, (camp_id, truck_id))
+
+    # 4️⃣ Check if all camps for this truck are delivered
+    cur.execute("""
+        SELECT COUNT(*)
+        FROM allocations
+        WHERE truck_id = %s
+          AND delivery_status != 'delivered'
+    """, (truck_id,))
+    remaining = cur.fetchone()[0]
+
+    # 5️⃣ Update truck status
+    if remaining == 0:
+        cur.execute("""
+            UPDATE trucks
+            SET status = 'available',
+                current_load_kg = 0
+            WHERE truck_id = %s
+        """, (truck_id,))
+        
+        # Check if ALL trucks are done to reset execution lock
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM trucks
+            WHERE status = 'in_transit'
+        """)
+        active_trucks = cur.fetchone()[0]
+        
+        if active_trucks == 0:
+            cur.execute("""
+                UPDATE system_state
+                SET is_execution_live = FALSE
+                WHERE id = 1
+            """)
+    else:
+        cur.execute("""
+            UPDATE trucks
+            SET status = 'in_transit'
+            WHERE truck_id = %s
+        """, (truck_id,))
 
     conn.commit()
     cur.close()
@@ -1176,92 +1545,38 @@ def mark_camp_delivered(camp_id):
     return redirect(url_for("driver_dashboard"))
 
 
-def auto_approve_logic(request_id, cur):
-    # get request info
+@app.route("/admin/reset-execution", methods=["POST"])
+def reset_execution():
+    """Admin can manually reset the execution lock and clear completed deliveries"""
+    if session.get("role") != "admin":
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # Reset execution lock
     cur.execute("""
-        SELECT item_type, quantity_needed, fulfilled_quantity, status
-        FROM requests
-        WHERE request_id = %s
-    """, (request_id,))
+        UPDATE system_state
+        SET is_execution_live = FALSE
+        WHERE id = 1
+    """)
 
-    row = cur.fetchone()
-    if not row:
-        return
-
-    item_type, needed, fulfilled, current_status = row
-    remaining = needed - fulfilled
-
-    # get warehouse stock
+    # Reset all trucks to available
     cur.execute("""
-        SELECT quantity
-        FROM warehouse_inventory
-        WHERE item_type = %s
-    """, (item_type,))
+        UPDATE trucks
+        SET status = 'available',
+            current_load_kg = 0
+    """)
 
-    stock_row = cur.fetchone()
-    stock = stock_row[0] if stock_row else 0
+    # Clear truck assignments for next round
+    cur.execute("DELETE FROM truck_assignments")
 
-    # calculate allocation
-    alloc = min(stock, remaining)
+    conn.commit()
+    cur.close()
+    conn.close()
 
-    # Empty Stock
-    if alloc <= 0:
-        cur.execute("""
-            UPDATE requests
-            SET status = 'pending',
-                admin_note = 'Insufficient warehouse stock',
-                last_updated = CURRENT_TIMESTAMP
-            WHERE request_id = %s
-        """, (request_id,))
-        return
-    
-    #Parrtial or Full
-
-    # record allocation
-    cur.execute("""
-        INSERT INTO allocations (request_id, allocated_quantity)
-        VALUES (%s, %s)
-    """, (request_id, alloc))
-
-    # update warehouse stock
-    cur.execute("""
-        UPDATE warehouse_inventory
-        SET quantity = quantity - %s,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE item_type = %s
-    """, (alloc, item_type))
-
-    new_fulfilled = fulfilled + alloc
-
-    # determine correct status
-    if new_fulfilled >= needed:
-        new_status = "approved"
-        note = "Request fully approved"
-    else:
-        new_status = "partially_approved"
-        note = "Request partially approved due to limited stock"
-
-    # update request
-    cur.execute("""
-        UPDATE requests
-        SET fulfilled_quantity = %s,
-            status = %s,
-            admin_note = %s,
-            last_updated = CURRENT_TIMESTAMP
-        WHERE request_id = %s
-    """, (new_fulfilled, new_status, note, request_id))
-
-
-def calculate_urgency(total_population, injured_population):
-    if total_population == 0:
-        return 0.0
-
-    score = (
-        (injured_population / total_population) * 0.7
-        + (total_population / 1000) * 0.3
-    )
-
-    return round(min(score, 1.0), 2)
+    flash("System reset complete. Ready for new delivery cycle.", "success")
+    return redirect(url_for("adminBoard"))
 
 
 #Logout
