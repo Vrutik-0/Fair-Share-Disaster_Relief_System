@@ -29,9 +29,6 @@ if (totalPop && injuredPop) {
     injuredPop.addEventListener("input", updateUrgency);
 }
 
-// ==========================================
-// ADMIN MAP (for admin dashboard - view_camps.html)
-// ==========================================
 let adminMap = null;
 let campMarkers = [];
 
@@ -146,34 +143,6 @@ async function loadTruckRoutes() {
                     }).addTo(adminMap);
                 });
             }
-
-            // Add numbered markers for each camp stop
-            route.camps.forEach((camp, stopIdx) => {
-                const y = camp.y;
-                const x = camp.x;
-                
-                // Draw stop marker with number
-                L.circleMarker([y, x], {
-                    radius: 12,
-                    color: color,
-                    fillColor: "white",
-                    fillOpacity: 0.9,
-                    weight: 3
-                }).addTo(adminMap).bindTooltip(
-                    `<b>Truck ${route.truck_id} - Stop ${stopIdx + 1}</b><br>${camp.name}<br>Urgency: ${camp.urgency?.toFixed(2) || 'N/A'}`,
-                    { permanent: false }
-                );
-                
-                // Add stop number text
-                L.marker([y, x], {
-                    icon: L.divIcon({
-                        className: 'stop-number-icon',
-                        html: `<div style="background:${color};color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:12px;">${stopIdx + 1}</div>`,
-                        iconSize: [20, 20],
-                        iconAnchor: [10, 10]
-                    })
-                }).addTo(adminMap);
-            });
         });
     } catch (err) {
         console.error("Error loading truck routes:", err);
@@ -209,9 +178,6 @@ if (document.getElementById("admin-map")) {
     setInterval(loadCampsOnAdminMap, 5000);
 }
 
-// ==========================================
-// GENERAL MAP (for view_camps.html)
-// ==========================================
 function initGeneralMap() {
     const mapElement = document.getElementById("map");
     if (!mapElement) return;
@@ -288,9 +254,6 @@ if (document.getElementById("map") && !document.getElementById("admin-map")) {
     }
 }
 
-// ==========================================
-// FLASH MESSAGES AUTO-HIDE
-// ==========================================
 document.querySelectorAll('.flash-success, .flash-warning, .flash-error').forEach(el => {
     setTimeout(() => {
         el.style.opacity = '0';
