@@ -1,10 +1,3 @@
-// ==========================================
-// Fair-Share V1 - Main JavaScript
-// ==========================================
-
-// ==========================================
-// URGENCY PREVIEW (for add_camp.html)
-// ==========================================
 const totalPop = document.querySelector('input[name="total_population"]');
 const injuredPop = document.querySelector('input[name="injured_population"]');
 const preview = document.getElementById("urgencyPreview");
@@ -261,4 +254,4 @@ document.querySelectorAll('.flash-success, .flash-warning, .flash-error').forEac
     }, 5000);
 });
 
-console.log("Fair-Share V1 - Script loaded successfully");
+console.log("Fair-Share V1 successfull 🦆");
