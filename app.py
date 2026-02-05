@@ -1246,7 +1246,7 @@ def driver_dashboard():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # 1️⃣ Get driver's truck
+    # Get truck
     cur.execute("""
         SELECT truck_id, truck_number, status
         FROM trucks
@@ -1265,7 +1265,7 @@ def driver_dashboard():
 
     truck_id, truck_number, truck_status = truck
 
-    # 2️⃣ Get assigned camps with visit order and their deliveries
+    # Get assigned camps with visit order and their deliveries
     cur.execute("""
         SELECT 
             c.camp_id,
@@ -1282,7 +1282,7 @@ def driver_dashboard():
     
     camps_data = cur.fetchall()
     
-    # 3️⃣ Build camps list with their deliveries
+    # Also build camps list with their deliveries
     camps = []
     for camp_row in camps_data:
         camp_id, camp_name, cord_x, cord_y, urgency, visit_order = camp_row
@@ -1325,7 +1325,7 @@ def driver_dashboard():
             "is_delivered": pending_count == 0 and len(items) == 0
         })
     
-    # 4️⃣ Also get flat deliveries list for backward compatibility
+    # Also get flat deliveries list for backward compatibility
     cur.execute("""
         SELECT
             c.name AS camp_name,
@@ -1400,9 +1400,9 @@ def driver_route():
     cur.close()
     conn.close()
 
-    # Build route starting from NGO depot
-    # Format: [y, x] for Leaflet (lat, lng)
-    points = [[DEPOT_Y, DEPOT_X]]  # NGO/Warehouse at (500, 0)
+    # Build route from NGO depot
+    # [y, x] for Leaflet (lat, lng)
+    points = [[DEPOT_Y, DEPOT_X]]  # Base at (500, 0)
     
     camp_info = []
     for idx, camp in enumerate(camps):
@@ -1474,7 +1474,7 @@ def mark_camp_delivered(camp_id):
 
     truck_id = row[0]
 
-    # 2️⃣ Mark allocations for THIS camp as delivered
+    # Mark allocations for camp as delivered
     cur.execute("""
         UPDATE allocations a
         SET delivery_status = 'delivered',
@@ -1485,7 +1485,7 @@ def mark_camp_delivered(camp_id):
           AND a.truck_id = %s
     """, (camp_id, truck_id))
 
-    # 3️⃣ Update request status
+    # Update request status
     cur.execute("""
         UPDATE requests
         SET status = 'delivered',
@@ -1499,7 +1499,7 @@ def mark_camp_delivered(camp_id):
           )
     """, (camp_id, truck_id))
 
-    # 4️⃣ Check if all camps for this truck are delivered
+    # Check if all camps for this truck are delivered
     cur.execute("""
         SELECT COUNT(*)
         FROM allocations
@@ -1508,7 +1508,7 @@ def mark_camp_delivered(camp_id):
     """, (truck_id,))
     remaining = cur.fetchone()[0]
 
-    # 5️⃣ Update truck status
+    # Update truck status
     if remaining == 0:
         cur.execute("""
             UPDATE trucks
