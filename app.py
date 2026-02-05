@@ -674,7 +674,7 @@ def assign_trucks():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # 1️⃣ Fetch ALL camps (not filtered)
+    # Fetch ALL camps
     cur.execute("""
         SELECT camp_id, name, cord_x, cord_y
         FROM camps
@@ -688,7 +688,7 @@ def assign_trucks():
         "y": float(r[3])
     } for r in rows]
 
-    # 2️⃣ Fetch available trucks FIRST (this fixes the error)
+    #Fetch available truck
     cur.execute("""
         SELECT truck_id
         FROM trucks
@@ -702,14 +702,14 @@ def assign_trucks():
         conn.close()
         return redirect(url_for("adminBoard"))
 
-    # 3️⃣ NOW clustering (Option 3)
+    #clustering
     from Algo.clustering import cluster_camps
     clusters = cluster_camps(camps, trucks)
 
-    # 4️⃣ Clear old assignments
+    #Clear old assignments
     cur.execute("DELETE FROM truck_assignments")
 
-    # 5️⃣ Persist cluster → truck mapping
+    # truck mapping
     for i, camp_list in clusters.items():
         truck_id = trucks[i]
 
@@ -718,12 +718,35 @@ def assign_trucks():
                 INSERT INTO truck_assignments (truck_id, camp_id)
                 VALUES (%s, %s)
             """, (truck_id, camp["camp_id"]))
+        # Assign available drivers to trucks
+    cur.execute("""
+        SELECT id FROM users
+        WHERE role = 'driver'
+        AND id NOT IN ( SELECT driver_id FROM trucks WHERE driver_id IS NOT NULL )
+        ORDER BY id """)
+    available_drivers = [r[0] for r in cur.fetchall()]
+
+    cur.execute("""
+        SELECT truck_id
+        FROM trucks
+        WHERE status = 'available'
+        AND driver_id IS NULL
+        ORDER BY truck_id """)
+    available_trucks = [r[0] for r in cur.fetchall()]
+
+    for truck_id, driver_id in zip(available_trucks, available_drivers):
+        cur.execute("""
+            UPDATE trucks
+            SET driver_id = %s
+            WHERE truck_id = %s
+        """, (driver_id, truck_id))
+
 
     conn.commit()
     cur.close()
     conn.close()
 
-    print("Truck assignments updated (Option 3)")
+    print("Truck assignments updated")
 
     return redirect(url_for("adminBoard"))
 
@@ -958,6 +981,169 @@ def get_truck_routes():
 
 
 #----------------------------------------------------------------------------------------------------------
+
+@app.route("/driver/dashboard")
+def driver_dashboard():
+    if session.get("role") != "driver":
+        return redirect(url_for("login"))
+
+    driver_id = session.get("user_id")
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # Get driver's truck
+    cur.execute("""
+        SELECT truck_id, truck_number
+        FROM trucks
+        WHERE driver_id = %s
+    """, (driver_id,))
+    truck = cur.fetchone()
+
+    if not truck:
+        cur.close()
+        conn.close()
+        return render_template(
+            "dashboard/driver.html",
+            truck_number=None,
+            camp_deliveries={}
+        )
+
+    truck_id, truck_number = truck
+
+    #Get delivery details per camp
+    cur.execute("""
+        SELECT
+            c.camp_id,
+            c.name,
+            ta.visit_order,
+            r.item_type,
+            a.allocated_quantity
+        FROM truck_assignments ta
+        JOIN camps c ON ta.camp_id = c.camp_id
+        JOIN requests r ON r.camp_id = c.camp_id
+        JOIN allocations a ON a.request_id = r.request_id
+        WHERE a.truck_id = %s
+          AND a.delivery_status IN ('scheduled', 'in_transit')
+        ORDER BY ta.visit_order
+    """, (truck_id,))
+
+    rows = cur.fetchall()
+    
+    # group deliveries by camp
+    camp_deliveries = {}
+
+    for r in rows:
+        camp_id, camp_name, order, item_type, qty = r
+
+        if camp_id not in camp_deliveries:
+            camp_deliveries[camp_id] = {
+                "camp_id": camp_id,
+                "name": camp_name,
+                "order": order,
+                "items": []
+            }
+
+        camp_deliveries[camp_id]["items"].append({
+            "item": item_type,
+            "qty": qty
+        })
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "dashboard/driver.html",
+        truck_number=truck_number,
+        camp_deliveries=camp_deliveries
+    )
+
+
+
+
+@app.route("/api/driver-route")
+def driver_route():
+    if session.get("role") != "driver":
+        return {"routes": []}
+
+    driver_id = session.get("user_id")
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+            c.cord_y,
+            c.cord_x,
+            ta.visit_order
+        FROM trucks t
+        JOIN truck_assignments ta ON ta.truck_id = t.truck_id
+        JOIN camps c ON ta.camp_id = c.camp_id
+        WHERE t.driver_id = %s
+        ORDER BY ta.visit_order
+    """, (driver_id,))
+
+    points = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    return {
+        "points": [[p[0], p[1]] for p in points]
+    }
+
+@app.route("/driver/delivered", methods=["POST"])
+def mark_delivered():
+    if session.get("role") != "driver":
+        return redirect(url_for("login"))
+
+    driver_id = session.get("user_id")
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE allocations
+        SET delivery_status = 'delivered',
+            delivery_datetime = CURRENT_TIMESTAMP
+        WHERE truck_id = (
+            SELECT truck_id FROM trucks WHERE driver_id = %s
+        )
+    """, (driver_id,))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect(url_for("driver_dashboard"))
+
+@app.route("/driver/deliver/<int:camp_id>", methods=["POST"])
+def mark_camp_delivered(camp_id):
+    if session.get("role") != "driver":
+        return redirect(url_for("login"))
+
+    driver_id = session.get("user_id")
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE allocations
+        SET delivery_status = 'delivered',
+            delivery_datetime = CURRENT_TIMESTAMP
+        WHERE truck_id = (
+            SELECT truck_id FROM trucks WHERE driver_id = %s
+        )
+        AND request_id IN (
+            SELECT request_id FROM requests WHERE camp_id = %s
+        )
+    """, (driver_id, camp_id))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect(url_for("driver_dashboard"))
+
 
 def auto_approve_logic(request_id, cur):
     # get request info

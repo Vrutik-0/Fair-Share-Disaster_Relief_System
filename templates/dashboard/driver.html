@@ -3,27 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
     <link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <title>Document</title>
+    <title>Driver Dashboard</title>
 </head>
 <body>
-    
-<h2>Driver Dashboard</h2>
-<p>Welcome, {{ session.name }}</p>
-<a href="/camps" class="btn"> View All Camps</a>
-<h3>Camp Map</h3>
-<div id="map" style="height: 400px; width: 500px;"></div>
 
-<a href="/logout">Logout</a>
-<script src="/static/script.js"></script>
+<h2>Driver Dashboard</h2>
+
+{% if not truck_number %}
+  <p>No truck assigned.</p>
+{% else %}
+  <h3>Truck: {{ truck_number }}</h3>
+
+  <h4>Route Map</h4>
+  <div id="map" style="height:500px;width:500px;"></div>
+
+  <h4>Truck Cargo</h4>
+  <table border="1">
+    <tr>
+      <th>Item</th>
+      <th>Quantity</th>
+    </tr>
+    {% for item in cargo %}
+    <tr>
+      <td>{{ item[0] }}</td>
+      <td>{{ item[1] }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <h4>Delivery Plan</h4>
+
+  {% if camp_deliveries %}
+    {% for camp in camp_deliveries.values() %}
+      <h5>Stop {{ camp.order }} – {{ camp.name }}</h5>
+      <ul>
+        {% for item in camp.items %}
+          <li>{{ item.item }} : {{ item.qty }}</li>
+        {% endfor %}
+      </ul>
+
+      <form method="POST"
+            action="{{ url_for('mark_camp_delivered', camp_id=camp.camp_id) }}">
+        <button>Mark {{ camp.name }} Delivered</button>
+      </form>
+    {% endfor %}
+  {% else %}
+    <p>No deliveries assigned.</p>
+  {% endif %}
+
+{% endif %}
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
 
 </body>
 </html>
-

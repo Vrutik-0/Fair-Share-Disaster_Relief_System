@@ -138,3 +138,31 @@ fetch("/api/truck-routes")
     });
 
   });
+
+
+  if (document.getElementById("map")) {
+  const map = L.map("map", {
+    crs: L.CRS.Simple,
+    minZoom: -1
+  }).setView([500, 500], 0);
+
+  L.rectangle([[0,0],[1000,1000]], {color:"#ccc", weight:1}).addTo(map);
+
+  fetch("/api/driver-route")
+    .then(res => res.json())
+    .then(data => {
+      if (!data.points || data.points.length === 0) return;
+
+      L.polyline(data.points, {
+        color: "blue",
+        weight: 4
+      }).addTo(map);
+
+      data.points.forEach(p => {
+        L.circleMarker(p, {
+          radius: 6,
+          color: "blue"
+        }).addTo(map);
+      });
+    });
+}
