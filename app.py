@@ -1151,6 +1151,8 @@ def mark_camp_delivered(camp_id):
         return redirect(url_for("login"))
 
     driver_id = session.get("user_id")
+    print("LOGGED IN USER ID:", driver_id)
+
 
     conn = get_db_connection()
     cur = conn.cursor()
