@@ -1,11 +1,6 @@
 from sklearn.cluster import KMeans
 
 def cluster_camps(camps, trucks):
-    """
-    camps: list of dicts {camp_id, x, y}
-    trucks: list of truck_ids
-    returns: {cluster_index: [camp, ...]}
-    """
 
     if not camps:
         return {}
@@ -18,7 +13,7 @@ def cluster_camps(camps, trucks):
         n_clusters=k,
         random_state=42,
         n_init=10
-    )
+        )
 
     labels = kmeans.fit_predict(points)
 

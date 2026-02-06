@@ -1,11 +1,6 @@
--- ============================================================================
--- FAIR-SHARE V1 - DATABASE SCHEMA
--- Disaster Relief Management System
--- ============================================================================
 -- This file contains all table definitions, constraints, triggers, and views.
 -- Run this file FIRST to set up the database structure.
 -- Then run syndata.sql to populate with test data.
--- ============================================================================
 
 
 -- ============================================================================
@@ -71,7 +66,7 @@ EXECUTE FUNCTION update_camps_timestamp();
 -- ============================================================================
 CREATE TABLE warehouse_inventory (
     item_id SERIAL PRIMARY KEY,
-    item_name VARCHAR(50),                    -- Display name (optional)
+    item_name VARCHAR(50),                   
     item_type VARCHAR(30) NOT NULL            -- Category: food, water, medicine-kit, other
         CHECK (item_type IN ('food', 'water', 'medicine-kit', 'other')),
     quantity INTEGER NOT NULL DEFAULT 0
@@ -323,8 +318,3 @@ ORDER BY c.urgency_score DESC;
 -- FROM allocations a
 -- JOIN requests r ON a.request_id = r.request_id
 -- JOIN trucks t ON a.truck_id = t.truck_id;
-
-
--- ============================================================================
--- END OF SCHEMA
--- ============================================================================

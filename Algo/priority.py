@@ -1,4 +1,4 @@
-URGENCY_MULTIPLIER = {
+URC = {
     "critical": 4,
     "high": 3,
     "medium": 2,
@@ -12,7 +12,7 @@ def compute_priority(camp):
     - urgency (priority)
     - current_supply
     """
-    urgency_weight = URGENCY_MULTIPLIER.get(camp["urgency"], 1)
+    urgency_weight = URC.get(camp["urgency"], 1)
     supply = max(camp["current_supply"], 1)
 
     return (camp["population"] * urgency_weight) / supply

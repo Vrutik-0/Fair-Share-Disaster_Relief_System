@@ -1,7 +1,4 @@
 def greedy_route(camps, depot, tol=0.03):
-    """
-    Urgency-first greedy routing with tolerance grouping.
-    """
     remaining = camps[:]
     route = []
     current = depot
@@ -16,7 +13,7 @@ def greedy_route(camps, depot, tol=0.03):
             if abs(c["urgency"] - max_urgency) <= tol
         ]
 
-        # if only one, take it
+        # if only one
         if len(urgency_group) == 1:
             next_camp = urgency_group[0]
         else:

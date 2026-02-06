@@ -1,7 +1,3 @@
--- ============================================================================
--- FAIR-SHARE V1 - SYNTHETIC TEST DATA
--- Disaster Relief Management System
--- ============================================================================
 -- This file contains all test data to populate the database for testing.
 -- Run data.sql FIRST to create the schema, then run this file.
 -- 
@@ -166,8 +162,3 @@ INSERT INTO requests (camp_id, item_type, quantity_needed, priority, status) VAL
 -- Verify trucks
 -- SELECT truck_id, truck_number, status, driver_id FROM trucks;
 -- Expected: 3 trucks, all available, no drivers assigned
-
-
--- ============================================================================
--- END OF SYNTHETIC DATA
--- ============================================================================
