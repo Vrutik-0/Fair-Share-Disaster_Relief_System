@@ -12,14 +12,14 @@
         .flash-warning { background-color: #fff3cd; color: #856404; padding: 10px; margin: 10px 0; border-radius: 4px; }
         .flash-error { background-color: #f8d7da; color: #721c24; padding: 10px; margin: 10px 0; border-radius: 4px; }
         .workflow-step { 
-            display: inline-block; 
-            padding: 10px 20px; 
-            margin: 5px; 
+            display: block; 
+            padding: 12px 16px; 
             background: #3498db; 
             color: white; 
             border: none; 
             border-radius: 4px; 
-            cursor: pointer; 
+            cursor: pointer;
+            font-size: 14px;
         }
         .workflow-step:hover { background: #2980b9; }
         .execute-btn { background: #c0392b !important; }
@@ -31,100 +31,113 @@
     </style>
 </head>
 <body>
-    <!-- Notification Bell -->
-    <button id="notif-bell" class="notif-bell">
-        🔔
-        <span id="notif-badge" class="notif-badge hidden">0</span>
-    </button>
+    <!-- Left Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">Fair-Share V1</div>
+        <div class="sidebar-section-title">Navigation</div>
+        <a href="{{ url_for('adminBoard') }}" class="sidebar-link active">Dashboard</a>
+        <a href="/camps" class="sidebar-link">View All Camps</a>
+        <a href="{{ url_for('warehouse_view') }}" class="sidebar-link">View Warehouse</a>
+        <a href="{{ url_for('admin_requests') }}" class="sidebar-link">Resource Requests</a>
+        <div class="sidebar-bottom">
+            <a href="/logout" class="sidebar-link">Logout</a>
+        </div>
+    </div>
 
     <!-- Toast Alerts -->
     <div id="notif-toasts" class="notif-toast-container"></div>
 
-    <!-- Notification Sidebar -->
-    <div id="notif-overlay" class="notif-overlay"></div>
-    <div id="notif-sidebar" class="notif-sidebar">
-        <div class="notif-sidebar-header">
-            <h3>🔔 Notifications</h3>
-            <div>
-                <button id="notif-mark-read" class="notif-mark-read">Mark all read</button>
-                <button onclick="document.getElementById('notif-sidebar').classList.remove('open');document.getElementById('notif-overlay').classList.remove('show');">✕</button>
+    <div class="page-content">
+        <h2>Admin Dashboard</h2>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="card-container">
+            <div class="card">
+                <h3>Total Camps</h3>
+                <p>{{ total_camps }}</p>
+            </div>
+            <div class="card critical">
+                <h3>Critical Camps</h3>
+                <p>{{ critical_camps }}</p>
+            </div>
+            <div class="card moderate">
+                <h3>Moderate Camps</h3>
+                <p>{{ moderate_camps }}</p>
+            </div>
+            <div class="card avg">
+                <h3>Avg Urgency</h3>
+                <p>{{ avg_urgency }}</p>
             </div>
         </div>
-        <div id="notif-list" class="notif-list">
-            <div class="notif-empty">Loading...</div>
+
+        <h3>Camp &amp; Route Map</h3>
+        <div class="legend">
+            <span class="legend-item"><span class="legend-color" style="background:blue;"></span> NGO/Warehouse</span>
+            <span class="legend-item"><span class="legend-color" style="background:red;"></span> Critical (&ge;0.7)</span>
+            <span class="legend-item"><span class="legend-color" style="background:orange;"></span> Moderate (0.4-0.7)</span>
+            <span class="legend-item"><span class="legend-color" style="background:green;"></span> Low (&lt;0.4)</span>
+        </div>
+        <div class="map-notif-row">
+            <div id="admin-map"></div>
+            <div class="notif-inline-box">
+                <div class="notif-inline-header">
+                    <span>Notifications</span>
+                    <span id="notif-unread-dot" class="notif-unread-dot hidden"></span>
+                    <button id="notif-mark-read-inline" class="mark-read-link">Mark all read</button>
+                </div>
+                <div id="notif-inline-list" class="notif-inline-list">
+                    <div class="notif-empty">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <h3>Delivery Workflow</h3>
+
+        <div style="width: 50%; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">
+            <p style="margin: 0 0 15px; color: #555;"><em>Execute these steps in order:</em></p>
+
+            <div style="margin-bottom: 10px;">
+                <form method="POST" action="{{ url_for('assign_trucks') }}">
+                    <button class="workflow-step" style="width: 100%; text-align: left;">1. Cluster &amp; Assign Trucks</button>
+                </form>
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <form method="POST" action="{{ url_for('greedy_prioritization') }}">
+                    <button class="workflow-step" style="width: 100%; text-align: left;">2. Prioritize Routes (Greedy)</button>
+                </form>
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <form method="POST" action="{{ url_for('load_trucks') }}">
+                    <button class="workflow-step" style="width: 100%; text-align: left;">3. Load Trucks (Knapsack)</button>
+                </form>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <form method="POST" action="{{ url_for('execute_delivery_plan') }}"
+                      onsubmit="return confirm('This will start deliveries and lock planning. Continue?');">
+                    <button class="workflow-step execute-btn" style="width: 100%; text-align: left;">4. Execute Delivery Plan</button>
+                </form>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 15px 0;">
+
+            <div>
+                <form method="POST" action="{{ url_for('reset_execution') }}"
+                      onsubmit="return confirm('This will reset all truck assignments and unlock the system. Continue?');">
+                    <button class="workflow-step" style="width: 100%; text-align: left; background: #6c757d;">Reset System</button>
+                </form>
+            </div>
         </div>
     </div>
-
-    <h2>📊 Admin Dashboard</h2>
-    
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="flash-{{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
-    <div class="card-container">
-        <div class="card">
-            <h3>Total Camps</h3>
-            <p>{{ total_camps }}</p>
-        </div>
-        <div class="card critical">
-            <h3>Critical Camps</h3>
-            <p>{{ critical_camps }}</p>
-        </div>
-        <div class="card moderate">
-            <h3>Moderate Camps</h3>
-            <p>{{ moderate_camps }}</p>
-        </div>
-        <div class="card avg">
-            <h3>Avg Urgency</h3>
-            <p>{{ avg_urgency }}</p>
-        </div>
-    </div>
-
-    <h3>🗺️ Camp & Route Map</h3>
-    <div class="legend">
-        <span class="legend-item"><span class="legend-color" style="background:blue;"></span> NGO/Warehouse</span>
-        <span class="legend-item"><span class="legend-color" style="background:red;"></span> Critical (≥0.7)</span>
-        <span class="legend-item"><span class="legend-color" style="background:orange;"></span> Moderate (0.4-0.7)</span>
-        <span class="legend-item"><span class="legend-color" style="background:green;"></span> Low (&lt;0.4)</span>
-    </div>
-    <div id="admin-map"></div>
-
-    <h3>📋 Management</h3>
-    <a href="/camps" class="btn">📍 View All Camps</a>
-    <a href="{{ url_for('warehouse_view') }}" class="btn">🏭 View Warehouse</a>
-    <a href="{{ url_for('admin_requests') }}" class="btn">📝 View Resource Requests</a>
-
-    <h3>🚚 Delivery Workflow</h3>
-    <p><em>Execute these steps in order:</em></p>
-
-    <form method="POST" action="{{ url_for('assign_trucks') }}" style="display:inline;">
-        <button class="workflow-step">1️⃣ Cluster & Assign Trucks</button>
-    </form>
-
-    <form method="POST" action="{{ url_for('greedy_prioritization') }}" style="display:inline;">
-        <button class="workflow-step">2️⃣ Prioritize Routes (Greedy)</button>
-    </form>
-
-    <form method="POST" action="{{ url_for('load_trucks') }}" style="display:inline;">
-        <button class="workflow-step">3️⃣ Load Trucks (Knapsack)</button>
-    </form>
-
-    <form method="POST" action="{{ url_for('execute_delivery_plan') }}" style="display:inline;"
-          onsubmit="return confirm('This will start deliveries and lock planning. Continue?');">
-        <button class="workflow-step execute-btn">4️⃣ Execute Delivery Plan</button>
-    </form>
-
-    <form method="POST" action="{{ url_for('reset_execution') }}" style="display:inline; margin-left: 20px;"
-          onsubmit="return confirm('This will reset all truck assignments and unlock the system. Continue?');">
-        <button class="workflow-step" style="background: #6c757d;">🔄 Reset System</button>
-    </form>
-
-    <br><br>
-    <a href="/logout">🚪 Logout</a>
 
     <script src="/static/script.js"></script>
 </body>

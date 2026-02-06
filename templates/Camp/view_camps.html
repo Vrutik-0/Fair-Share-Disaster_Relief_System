@@ -6,44 +6,77 @@
 </head>
 <body>
 
-<h2>All Camps</h2>
+    {% if session.get('role') == 'admin' %}
+    <div class="sidebar">
+        <div class="sidebar-header">Fair-Share V1</div>
+        <div class="sidebar-section-title">Navigation</div>
+        <a href="{{ url_for('adminBoard') }}" class="sidebar-link">Dashboard</a>
+        <a href="/camps" class="sidebar-link active">View All Camps</a>
+        <a href="{{ url_for('warehouse_view') }}" class="sidebar-link">View Warehouse</a>
+        <a href="{{ url_for('admin_requests') }}" class="sidebar-link">Resource Requests</a>
+        <div class="sidebar-bottom">
+            <a href="/logout" class="sidebar-link">Logout</a>
+        </div>
+    </div>
+    {% elif session.get('role') == 'camp_manager' %}
+    <div class="sidebar">
+        <div class="sidebar-header">Fair-Share V1</div>
+        <div class="sidebar-section-title">Navigation</div>
+        <a href="{{ url_for('campBoard') }}" class="sidebar-link">Dashboard</a>
+        <a href="/camp/add" class="sidebar-link">Add Camp</a>
+        <a href="/camps" class="sidebar-link active">View All Camps</a>
+        <div class="sidebar-section-title">Requests</div>
+        <a href="{{ url_for('create_request') }}" class="sidebar-link">New Resource Request</a>
+        <a href="{{ url_for('view_my_requests') }}" class="sidebar-link">My Requests</a>
+        <div class="sidebar-section-title">Warehouse</div>
+        <a href="{{ url_for('warehouse_view') }}" class="sidebar-link">View Inventory</a>
+        <div class="sidebar-bottom">
+            <a href="/logout" class="sidebar-link">Logout</a>
+        </div>
+    </div>
+    {% endif %}
 
-<table border="1" cellpadding="8">
-    <tr>
-    <th>Camp ID</th>
-    <th>Name</th>
-    <th>X</th>
-    <th>Y</th>
-    <th>Total Pop</th>
-    <th>Injured</th>
-    <th>Urgency</th>
-    <th>Status</th>
-    <th>Manager ID</th>
-    <th>Manager Name</th>
-    <th>Created</th>
-</tr>
+<div class="page-content">
+    <h2>All Camps</h2>
 
+    <table class="simple-table">
+        <thead>
+            <tr>
+                <th>Camp ID</th>
+                <th>Name</th>
+                <th>X</th>
+                <th>Y</th>
+                <th>Total Pop</th>
+                <th>Injured</th>
+                <th>Urgency</th>
+                <th>Status</th>
+                <th>Manager ID</th>
+                <th>Manager Name</th>
+                <th>Created</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in camps %}
+            <tr>
+                <td>{{ c[0] }}</td>
+                <td>{{ c[1] }}</td>
+                <td>{{ c[2] }}</td>
+                <td>{{ c[3] }}</td>
+                <td>{{ c[4] }}</td>
+                <td>{{ c[5] }}</td>
+                <td>{{ c[6] }}</td>
+                <td>{{ c[7] }}</td>
+                <td>{{ c[9] }}</td>
+                <td>{{ c[10] or "N/A" }}</td>
+                <td>{{ c[8].strftime('%Y-%m-%d') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 
-   {% for c in camps %}
-<tr>
-    <td>{{ c[0] }}</td>
-    <td>{{ c[1] }}</td>
-    <td>{{ c[2] }}</td>
-    <td>{{ c[3] }}</td>
-    <td>{{ c[4] }}</td>
-    <td>{{ c[5] }}</td>
-    <td>{{ c[6] }}</td>
-    <td>{{ c[7] }}</td>
-    <td>{{ c[9] }}</td>
-    <td>{{ c[10] or "N/A" }}</td>
-    <td>{{ c[8].strftime('%Y-%m-%d') }}</td>
-</tr>
-{% endfor %}
-
-</table>
-
-<br>
-<a href="javascript:history.back()" class="btn">⬅ Back</a>
+    <br>
+    <a href="javascript:history.back()" class="btn">Back</a>
+</div>
 
 </body>
 </html>

@@ -115,9 +115,6 @@ def execution_locked():
     conn.close()
     return locked
 
-
-# ---- Notification Helpers ----
-
 def notify(user_id, message, level='info', cur=None):
     """Insert a notification for a specific user.
     If a cursor is provided, use it (caller manages commit). Otherwise open a new connection."""
@@ -489,6 +486,7 @@ def create_request():
     if request.method == "POST":
         camp_id = request.form["camp_id"]
         item_type = request.form["item_type"]
+        item_name = request.form.get("item_name", "").strip() or None
         quantity = int(request.form["quantity_needed"])
         priority_override = request.form.get("priority")
 
@@ -513,14 +511,14 @@ def create_request():
 
         cur.execute("""
             INSERT INTO requests
-            (camp_id, item_type, quantity_needed, priority)
-            VALUES (%s, %s, %s, %s)
-        """, (camp_id, item_type, quantity, priority))
+            (camp_id, item_type, item_name, quantity_needed, priority)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (camp_id, item_type, item_name, quantity, priority))
 
         # Get camp name for notification
         cur.execute("SELECT name FROM camps WHERE camp_id = %s", (camp_id,))
         camp_name = cur.fetchone()[0]
-        notify_role('admin', f"📋 New {priority} request: {quantity} {item_type} from {camp_name}", 'info', cur)
+        notify_role('admin', f" New {priority} request: {quantity} {item_type} from {camp_name}", 'info', cur)
 
         conn.commit()
         cur.close()
@@ -548,7 +546,8 @@ def admin_requests():
             r.item_type,
             r.quantity_needed,
             r.fulfilled_quantity,
-            r.priority
+            r.priority,
+            r.item_name
         FROM requests r
         JOIN camps c ON r.camp_id = c.camp_id
         WHERE r.status IN ('pending', 'partially_approved')
@@ -568,10 +567,14 @@ def admin_requests():
     # Convert to list of dicts
     pending_reqs = []
     for r in rows:
+        display_type = r[2]
+        if r[2] == 'other' and r[6]:
+            display_type = f"other ({r[6]})"
         pending_reqs.append({
             "request_id": r[0],
             "camp_name": r[1],
-            "item_type": r[2],
+            "item_type": display_type,
+            "raw_item_type": r[2],
             "quantity_needed": r[3],
             "fulfilled_quantity": r[4],
             "priority": r[5],
@@ -589,7 +592,7 @@ def admin_requests():
     grouped = defaultdict(list)
 
     for r in pending_reqs:
-        grouped[r["item_type"]].append(r)
+        grouped[r["raw_item_type"]].append(r)
 
     for item_type, reqs in grouped.items():
 
@@ -906,7 +909,8 @@ def view_my_requests():
         r.quantity_needed,
         r.fulfilled_quantity,
         r.status,
-        r.admin_note
+        r.admin_note,
+        r.item_name
         FROM requests r
         JOIN camps c ON r.camp_id = c.camp_id
         WHERE c.manager_id = %s
@@ -915,10 +919,19 @@ def view_my_requests():
 
 
     data = cur.fetchall()
+
+    # Build display data with item_name merged
+    display_data = []
+    for row in data:
+        item_display = row[0]
+        if row[0] == 'other' and row[5]:
+            item_display = f"other ({row[5]})"
+        display_data.append((item_display, row[1], row[2], row[3], row[4]))
+
     cur.close()
     conn.close()
 
-    return render_template("requests/my_requests.html", requests=data)
+    return render_template("requests/my_requests.html", requests=display_data)
 
 #----------------------------------------------------------------------------------------------------------
 @app.route("/admin/assign-trucks", methods=["POST"])
@@ -1619,9 +1632,9 @@ def mark_camp_delivered(camp_id):
     t_num = cur.fetchone()[0]
     driver_name = session.get('name', 'Driver')
     if camp_row:
-        notify_role('admin', f"📦 Delivery completed: {driver_name} delivered to {camp_row[0]} ({t_num})", 'success', cur)
+        notify_role('admin', f"  Delivery completed: {driver_name} delivered to {camp_row[0]} ({t_num})", 'success', cur)
         if camp_row[1]:
-            notify(camp_row[1], f"📦 Delivery arrived at {camp_row[0]} via {t_num}", 'success', cur)
+            notify(camp_row[1], f"  Delivery arrived at {camp_row[0]} via {t_num}", 'success', cur)
 
     # Check if all camps for this truck are delivered
     cur.execute("""
@@ -1703,8 +1716,6 @@ def reset_execution():
     return redirect(url_for("adminBoard"))
 
 
-# ======================== NOTIFICATION API ========================
-
 @app.route("/api/notifications")
 def api_notifications():
     """Get all notifications for current user (latest 50)."""
@@ -1769,9 +1780,6 @@ def api_mark_read():
     conn.close()
 
     return jsonify({"ok": True})
-
-
-# ======================== END NOTIFICATION API ========================
 
 
 #Logout

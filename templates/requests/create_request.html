@@ -3,46 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>Request Resources</title>
+    <style>
+        .other-name-field { display: none; margin-top: 10px; }
+    </style>
 </head>
 <body>
-    <h2>Request Resources</h2>
+    <!-- Left Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">Fair-Share V1</div>
+        <div class="sidebar-section-title">Navigation</div>
+        <a href="{{ url_for('campBoard') }}" class="sidebar-link">Dashboard</a>
+        <a href="/camp/add" class="sidebar-link">Add Camp</a>
+        <a href="/camps" class="sidebar-link">View All Camps</a>
+        <div class="sidebar-section-title">Requests</div>
+        <a href="{{ url_for('create_request') }}" class="sidebar-link active">New Resource Request</a>
+        <a href="{{ url_for('view_my_requests') }}" class="sidebar-link">My Requests</a>
+        <div class="sidebar-section-title">Warehouse</div>
+        <a href="{{ url_for('warehouse_view') }}" class="sidebar-link">View Inventory</a>
+        <div class="sidebar-bottom">
+            <a href="/logout" class="sidebar-link">Logout</a>
+        </div>
+    </div>
 
-<form method="POST">
+    <div class="page-content">
+        <h2>Request Resources</h2>
 
-    <label>Camp</label>
-    <select name="camp_id" required>
-        {% for c in camps %}
-        <option value="{{ c[0] }}">
-            {{ c[1] }} (Urgency: {{ c[2] }})
-        </option>
-        {% endfor %}
-    </select>
+        <form method="POST">
 
-    <label>Item Type</label>
-    <select name="item_type" required>
-        <option value="food">Food</option>
-        <option value="water">Water</option>
-        <option value="medicine-kit">Medicine Kit</option>
-        <option value="other">Other</option>
-    </select>
+            <label>Camp</label>
+            <select name="camp_id" required>
+                {% for c in camps %}
+                <option value="{{ c[0] }}">
+                    {{ c[1] }} (Urgency: {{ c[2] }})
+                </option>
+                {% endfor %}
+            </select>
 
-    <label>Quantity Needed</label>
-    <input type="number" name="quantity_needed" min="1" required>
+            <label>Item Type</label>
+            <select name="item_type" id="item_type" required onchange="toggleOtherName()">
+                <option value="food">Food</option>
+                <option value="water">Water</option>
+                <option value="medicine-kit">Medicine Kit</option>
+                <option value="other">Other</option>
+            </select>
 
-    <label>Override Priority (optional)</label>
-    <select name="priority">
-        <option value="">Auto (recommended)</option>
-        <option value="low">Low</option>
-        <option value="medium">Medium</option>
-        <option value="high">High</option>
-        <option value="critical">Critical</option>
-    </select>
+            <div class="other-name-field" id="other-name-field">
+                <label>Item Name</label>
+                <input type="text" name="item_name" placeholder="Specify item name (optional)">
+            </div>
 
-    <button type="submit">Submit Request</button>
-</form>
+            <label>Quantity Needed</label>
+            <input type="number" name="quantity_needed" min="1" required>
 
-<a href="{{ url_for('campBoard') }}">⬅ Back</a>
+            <label>Override Priority (optional)</label>
+            <select name="priority">
+                <option value="">Auto (recommended)</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+            </select>
 
+            <button type="submit">Submit Request</button>
+        </form>
+
+        <br>
+        <a href="{{ url_for('campBoard') }}" class="btn">Back</a>
+    </div>
+
+    <script>
+        function toggleOtherName() {
+            var select = document.getElementById('item_type');
+            var field = document.getElementById('other-name-field');
+            field.style.display = select.value === 'other' ? 'block' : 'none';
+        }
+    </script>
 </body>
 </html>

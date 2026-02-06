@@ -1,31 +1,80 @@
-<h2>Central Warehouse Inventory</h2>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>Warehouse Inventory</title>
+</head>
+<body>
+    {% if session.get('role') == 'admin' %}
+    <div class="sidebar">
+        <div class="sidebar-header">Fair-Share V1</div>
+        <div class="sidebar-section-title">Navigation</div>
+        <a href="{{ url_for('adminBoard') }}" class="sidebar-link">Dashboard</a>
+        <a href="/camps" class="sidebar-link">View All Camps</a>
+        <a href="{{ url_for('warehouse_view') }}" class="sidebar-link active">View Warehouse</a>
+        <a href="{{ url_for('admin_requests') }}" class="sidebar-link">Resource Requests</a>
+        <div class="sidebar-bottom">
+            <a href="/logout" class="sidebar-link">Logout</a>
+        </div>
+    </div>
+    {% elif session.get('role') == 'camp_manager' %}
+    <div class="sidebar">
+        <div class="sidebar-header">Fair-Share V1</div>
+        <div class="sidebar-section-title">Navigation</div>
+        <a href="{{ url_for('campBoard') }}" class="sidebar-link">Dashboard</a>
+        <a href="/camp/add" class="sidebar-link">Add Camp</a>
+        <a href="/camps" class="sidebar-link">View All Camps</a>
+        <div class="sidebar-section-title">Requests</div>
+        <a href="{{ url_for('create_request') }}" class="sidebar-link">New Resource Request</a>
+        <a href="{{ url_for('view_my_requests') }}" class="sidebar-link">My Requests</a>
+        <div class="sidebar-section-title">Warehouse</div>
+        <a href="{{ url_for('warehouse_view') }}" class="sidebar-link active">View Inventory</a>
+        <div class="sidebar-bottom">
+            <a href="/logout" class="sidebar-link">Logout</a>
+        </div>
+    </div>
+    {% endif %}
 
-{% if session['role'] == 'admin' %}
-<a href="/warehouse/add" class="btn">Add Stock</a>
-{% endif %}
+    <div class="page-content">
+        <h2>Central Warehouse Inventory</h2>
 
-<table>
-    <tr>
-        <th>Item</th>
-        <th>Type</th>
-        <th>Quantity</th>
-        <th>Unit</th>
-        <th>Status</th>
-    </tr>
+        {% if session['role'] == 'admin' %}
+        <a href="/warehouse/add" class="btn">Add Stock</a>
+        {% endif %}
 
-    {% for i in items %}
-    <tr>
-        <td>{{ i[0] }}</td>
-        <td>{{ i[1] }}</td>
-        <td>{{ i[2] }}</td>
-        <td>{{ i[3] }}</td>
-        <td>
-            {% if i[2] < i[4] %}
-                <span style="color:red;">Low Stock</span>
-            {% else %}
-                OK
-            {% endif %}
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+        <table class="simple-table">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Type</th>
+                    <th>Quantity</th>
+                    <th>Unit</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for i in items %}
+                <tr>
+                    <td>{{ i[0] }}</td>
+                    <td>{{ i[1] }}</td>
+                    <td>{{ i[2] }}</td>
+                    <td>{{ i[3] }}</td>
+                    <td>
+                        {% if i[2] < i[4] %}
+                            <span style="color:red;">Low Stock</span>
+                        {% else %}
+                            OK
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <br>
+        <a href="javascript:history.back()" class="btn">Back</a>
+    </div>
+</body>
+</html>

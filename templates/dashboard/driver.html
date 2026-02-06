@@ -8,7 +8,6 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <title>Driver Dashboard</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
         .status-badge { 
             padding: 4px 8px; 
             border-radius: 4px; 
@@ -43,7 +42,6 @@
         .urgency-low { border-left: 4px solid green; }
         .items-table { width: 100%; margin-top: 10px; }
         .items-table th, .items-table td { padding: 5px; text-align: left; }
-        .btn { padding: 10px 20px; cursor: pointer; border: none; border-radius: 4px; }
         .btn-deliver { background-color: #28a745; color: white; }
         .btn-deliver:disabled { background-color: #ccc; cursor: not-allowed; }
         #map { height: 400px; width: 100%; max-width: 600px; border: 2px solid #333; }
@@ -52,101 +50,101 @@
     </style>
 </head>
 <body>
-    <!-- Notification Bell -->
-    <button id="notif-bell" class="notif-bell">
-        🔔
-        <span id="notif-badge" class="notif-badge hidden">0</span>
-    </button>
+    <!-- Left Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">Fair-Share V1</div>
+        <div class="sidebar-section-title">Navigation</div>
+        <a href="{{ url_for('driver_dashboard') }}" class="sidebar-link active">Dashboard</a>
+        <div class="sidebar-bottom">
+            <a href="{{ url_for('logout') }}" class="sidebar-link">Logout</a>
+        </div>
+    </div>
 
     <!-- Toast Alerts -->
     <div id="notif-toasts" class="notif-toast-container"></div>
 
-    <!-- Notification Sidebar -->
-    <div id="notif-overlay" class="notif-overlay"></div>
-    <div id="notif-sidebar" class="notif-sidebar">
-        <div class="notif-sidebar-header">
-            <h3>🔔 Notifications</h3>
-            <div>
-                <button id="notif-mark-read" class="notif-mark-read">Mark all read</button>
-                <button onclick="document.getElementById('notif-sidebar').classList.remove('open');document.getElementById('notif-overlay').classList.remove('show');">✕</button>
+    <div class="page-content">
+        <h2>Driver Dashboard</h2>
+        <p>Welcome, <strong>{{ session['name'] }}</strong></p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% if truck_number %}
+            <div style="margin: 15px 0;">
+                <strong>Assigned Truck:</strong> {{ truck_number }}
+                <span class="status-badge status-{{ truck_status }}">{{ truck_status or 'N/A' }}</span>
+            </div>
+        {% else %}
+            <p style="color: orange;">No truck assigned to you yet.</p>
+        {% endif %}
+
+        <h3>Route Map</h3>
+        <div class="map-notif-row">
+            <div id="map"></div>
+            <div class="notif-inline-box">
+                <div class="notif-inline-header">
+                    <span>Notifications</span>
+                    <span id="notif-unread-dot" class="notif-unread-dot hidden"></span>
+                    <button id="notif-mark-read-inline" class="mark-read-link">Mark all read</button>
+                </div>
+                <div id="notif-inline-list" class="notif-inline-list">
+                    <div class="notif-empty">Loading...</div>
+                </div>
             </div>
         </div>
-        <div id="notif-list" class="notif-list">
-            <div class="notif-empty">Loading...</div>
-        </div>
-    </div>
+        <p><em>Blue = NGO/Warehouse (Start) | Red = Camp Stops (in order)</em></p>
 
-    <h2>🚚 Driver Dashboard</h2>
-    <p>Welcome, <strong>{{ session['name'] }}</strong></p>
+        <h3>Delivery Route (in order)</h3>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="flash-{{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
-    {% if truck_number %}
-        <div style="margin: 15px 0;">
-            <strong>Assigned Truck:</strong> {{ truck_number }}
-            <span class="status-badge status-{{ truck_status }}">{{ truck_status or 'N/A' }}</span>
-        </div>
-    {% else %}
-        <p style="color: orange;">⚠️ No truck assigned to you yet.</p>
-    {% endif %}
-
-    <h3>📍 Route Map</h3>
-    <div id="map"></div>
-    <p><em>🔵 Blue = NGO/Warehouse (Start) | 🔴 Red = Camp Stops (in order)</em></p>
-
-    <h3>📦 Delivery Route (in order)</h3>
-
-    {% if camps %}
-        {% for camp in camps %}
-        <div class="camp-card {% if camp.is_delivered %}delivered{% endif %} 
-                    {% if camp.urgency >= 0.7 %}urgency-high{% elif camp.urgency >= 0.4 %}urgency-medium{% else %}urgency-low{% endif %}">
-            
-            <div class="camp-header">
-                <div>
-                    <span class="stop-number">{{ camp.visit_order or loop.index }}</span>
-                    <strong style="font-size: 18px; margin-left: 10px;">{{ camp.name }}</strong>
-                    <span style="color: gray; font-size: 12px;">(Urgency: {{ "%.2f"|format(camp.urgency) }})</span>
-                </div>
+        {% if camps %}
+            {% for camp in camps %}
+            <div class="camp-card {% if camp.is_delivered %}delivered{% endif %} 
+                        {% if camp.urgency >= 0.7 %}urgency-high{% elif camp.urgency >= 0.4 %}urgency-medium{% else %}urgency-low{% endif %}">
                 
-                {% if not camp.is_delivered and camp.delivery_items %}
-                <form method="POST" action="{{ url_for('mark_camp_delivered', camp_id=camp.camp_id) }}">
-                    <button type="submit" class="btn btn-deliver">✓ Mark Delivered</button>
-                </form>
-                {% elif camp.is_delivered %}
-                    <span style="color: green; font-weight: bold;">✓ Delivered</span>
+                <div class="camp-header">
+                    <div>
+                        <span class="stop-number">{{ camp.visit_order or loop.index }}</span>
+                        <strong style="font-size: 18px; margin-left: 10px;">{{ camp.name }}</strong>
+                        <span style="color: gray; font-size: 12px;">(Urgency: {{ "%.2f"|format(camp.urgency) }})</span>
+                    </div>
+                    
+                    {% if not camp.is_delivered and camp.delivery_items %}
+                    <form method="POST" action="{{ url_for('mark_camp_delivered', camp_id=camp.camp_id) }}">
+                        <button type="submit" class="btn btn-deliver">Mark Delivered</button>
+                    </form>
+                    {% elif camp.is_delivered %}
+                        <span style="color: green; font-weight: bold;">Delivered</span>
+                    {% endif %}
+                </div>
+
+                {% if camp.delivery_items %}
+                <table class="items-table">
+                    <tr>
+                        <th>Item</th>
+                        <th>Quantity</th>
+                    </tr>
+                    {% for item in camp.delivery_items %}
+                    <tr>
+                        <td>{{ item.type }}</td>
+                        <td>{{ item.quantity }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+                {% else %}
+                    <p style="color: gray; font-style: italic;">No pending deliveries for this camp.</p>
                 {% endif %}
             </div>
-
-            {% if camp.delivery_items %}
-            <table class="items-table">
-                <tr>
-                    <th>Item</th>
-                    <th>Quantity</th>
-                </tr>
-                {% for item in camp.delivery_items %}
-                <tr>
-                    <td>{{ item.type }}</td>
-                    <td>{{ item.quantity }}</td>
-                </tr>
-                {% endfor %}
-            </table>
-            {% else %}
-                <p style="color: gray; font-style: italic;">No pending deliveries for this camp.</p>
-            {% endif %}
-        </div>
-        {% endfor %}
-    {% else %}
-        <p>No deliveries assigned to your route.</p>
-    {% endif %}
-
-    <br>
-    <a href="{{ url_for('logout') }}">🚪 Logout</a>
+            {% endfor %}
+        {% else %}
+            <p>No deliveries assigned to your route.</p>
+        {% endif %}
+    </div>
 
     <script>
         // Initialize map
@@ -158,14 +156,12 @@
         const bounds = [[0, 0], [1000, 1000]];
         map.fitBounds(bounds);
 
-        // Draw boundary
         L.rectangle(bounds, {
             color: "#333",
             weight: 2,
             fill: false
         }).addTo(map);
 
-        // Draw grid
         function drawGrid(step = 100) {
             for (let x = 0; x <= 1000; x += step) {
                 L.polyline([[0, x], [1000, x]], {
@@ -184,7 +180,6 @@
         }
         drawGrid(100);
 
-        // Fetch and draw route
         fetch("/api/driver-route")
             .then(res => res.json())
             .then(data => {
@@ -193,14 +188,12 @@
                     return;
                 }
 
-                // Draw route line
                 L.polyline(data.points, {
                     color: "blue",
                     weight: 4,
                     opacity: 0.8
                 }).addTo(map);
 
-                // Draw markers
                 data.points.forEach((p, i) => {
                     const isDepot = i === 0;
                     
@@ -210,12 +203,11 @@
                         fillColor: isDepot ? "blue" : "red",
                         fillOpacity: 0.9
                     }).addTo(map).bindTooltip(
-                        isDepot ? "🏭 NGO / Warehouse" : `Stop ${i}: ${data.camps[i-1]?.name || 'Camp'}`,
+                        isDepot ? "NGO / Warehouse" : `Stop ${i}: ${data.camps[i-1]?.name || 'Camp'}`,
                         { permanent: false }
                     );
                 });
 
-                // Add direction arrows
                 if (data.points.length >= 2) {
                     for (let i = 0; i < data.points.length - 1; i++) {
                         const from = data.points[i];
@@ -228,7 +220,7 @@
                             color: "green",
                             fillColor: "green",
                             fillOpacity: 1
-                        }).addTo(map).bindTooltip(`→ ${i + 1}`, { permanent: true, direction: 'center', className: 'arrow-label' });
+                        }).addTo(map).bindTooltip(`${i + 1}`, { permanent: true, direction: 'center', className: 'arrow-label' });
                     }
                 }
             })

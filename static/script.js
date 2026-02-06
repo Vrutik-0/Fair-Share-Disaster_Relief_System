@@ -200,7 +200,7 @@ function initGeneralMap() {
         color: "blue",
         fillColor: "blue",
         fillOpacity: 0.9
-    }).addTo(map).bindTooltip("🏭 NGO / Warehouse", { permanent: true });
+    }).addTo(map).bindTooltip({ permanent: true });
 
     // Load camps
     fetch("/api/camps")
@@ -254,14 +254,14 @@ document.querySelectorAll('.flash-success, .flash-warning, .flash-error').forEac
     }, 5000);
 });
 
-// ======================== NOTIFICATION SYSTEM ========================
-
 let _notifLastCount = 0;
 let _notifKnownIds = new Set();
 
 function notifInit() {
-    const bell = document.getElementById('notif-bell');
-    if (!bell) return;
+    const notifBtn = document.getElementById('notif-btn');
+    const inlineList = document.getElementById('notif-inline-list');
+
+    if (!notifBtn && !inlineList) return;
 
     // Initial fetch
     notifPollCount();
@@ -271,22 +271,33 @@ function notifInit() {
     setInterval(notifPollCount, 8000);
     setInterval(notifLoadHistory, 15000);
 
-    // Bell click
-    bell.addEventListener('click', () => {
-        const sidebar = document.getElementById('notif-sidebar');
-        const overlay = document.getElementById('notif-overlay');
-        sidebar.classList.toggle('open');
-        overlay.classList.toggle('show');
-    });
+    // Panel mode (sub-pages with sidebar notif button)
+    if (notifBtn) {
+        notifBtn.addEventListener('click', () => {
+            const panel = document.getElementById('notif-panel');
+            const overlay = document.getElementById('notif-overlay');
+            panel.classList.toggle('open');
+            overlay.classList.toggle('show');
+        });
 
-    // Overlay click closes sidebar
-    document.getElementById('notif-overlay')?.addEventListener('click', () => {
-        document.getElementById('notif-sidebar').classList.remove('open');
-        document.getElementById('notif-overlay').classList.remove('show');
-    });
+        document.getElementById('notif-overlay')?.addEventListener('click', () => {
+            document.getElementById('notif-panel').classList.remove('open');
+            document.getElementById('notif-overlay').classList.remove('show');
+        });
+    }
 
-    // Mark all read button
+    // Mark all read — panel mode
     document.getElementById('notif-mark-read')?.addEventListener('click', () => {
+        fetch('/api/notifications/mark-read', { method: 'POST' })
+            .then(() => {
+                notifPollCount();
+                notifLoadHistory();
+            });
+    });
+
+    // Mark all read — inline mode (dashboards)
+    document.getElementById('notif-mark-read-inline')?.addEventListener('click', (e) => {
+        e.preventDefault();
         fetch('/api/notifications/mark-read', { method: 'POST' })
             .then(() => {
                 notifPollCount();
@@ -299,14 +310,26 @@ async function notifPollCount() {
     try {
         const res = await fetch('/api/notifications/unread-count');
         const data = await res.json();
-        const badge = document.getElementById('notif-badge');
-        if (!badge) return;
 
-        if (data.count > 0) {
-            badge.textContent = data.count;
-            badge.classList.remove('hidden');
-        } else {
-            badge.classList.add('hidden');
+        // Badge mode (sub-pages with sidebar button)
+        const badge = document.getElementById('notif-badge');
+        if (badge) {
+            if (data.count > 0) {
+                badge.textContent = data.count;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        // Inline blue dot mode (dashboards)
+        const dot = document.getElementById('notif-unread-dot');
+        if (dot) {
+            if (data.count > 0) {
+                dot.classList.remove('hidden');
+            } else {
+                dot.classList.add('hidden');
+            }
         }
 
         // If count increased, fetch new notifications for toasts
@@ -323,7 +346,8 @@ async function notifLoadHistory() {
     try {
         const res = await fetch('/api/notifications');
         const data = await res.json();
-        const list = document.getElementById('notif-list');
+        // Inline list (dashboards) takes priority, fallback to panel list (sub-pages)
+        const list = document.getElementById('notif-inline-list') || document.getElementById('notif-list');
         if (!list) return;
 
         if (data.length === 0) {
@@ -377,11 +401,9 @@ async function notifShowNewToasts() {
     } catch (e) { /* ignore */ }
 }
 
-// Initialize on page load
-if (document.getElementById('notif-bell')) {
+// Initialize on page load — inline mode (dashboards) or panel mode (sub-pages)
+if (document.getElementById('notif-btn') || document.getElementById('notif-inline-list')) {
     notifInit();
 }
-
-// ======================== END NOTIFICATION SYSTEM ========================
 
 console.log("Fair-Share V1 successfull 🦆");

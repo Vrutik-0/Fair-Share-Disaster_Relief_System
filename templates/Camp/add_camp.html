@@ -6,32 +6,51 @@
 </head>
 <body>
 
-<h2>Add Camp</h2>
+    <div class="sidebar">
+        <div class="sidebar-header">Fair-Share V1</div>
+        <div class="sidebar-section-title">Navigation</div>
+        <a href="{{ url_for('campBoard') }}" class="sidebar-link">Dashboard</a>
+        <a href="/camp/add" class="sidebar-link active">Add Camp</a>
+        <a href="/camps" class="sidebar-link">View All Camps</a>
+        <div class="sidebar-section-title">Requests</div>
+        <a href="{{ url_for('create_request') }}" class="sidebar-link">New Resource Request</a>
+        <a href="{{ url_for('view_my_requests') }}" class="sidebar-link">My Requests</a>
+        <div class="sidebar-section-title">Warehouse</div>
+        <a href="{{ url_for('warehouse_view') }}" class="sidebar-link">View Inventory</a>
+        <div class="sidebar-bottom">
+            <a href="/logout" class="sidebar-link">Logout</a>
+        </div>
+    </div>
 
-<form method="POST" id="campForm">
+<div class="page-content">
+    <h2>Add Camp</h2>
 
-    <input type="text" name="name"
-           placeholder="Camp Name (Unique)"
-           required>
+    <form method="POST" id="campForm">
 
-    <label>X Coordinate (0–1000)</label>
-    <input type="number" name="x" min="0" max="1000" required>
+        <input type="text" name="name"
+               placeholder="Camp Name (Unique)"
+               required>
 
-    <label>Y Coordinate (0–1000)</label>
-    <input type="number" name="y" min="0" max="1000" required>
+        <label>X Coordinate (0-1000)</label>
+        <input type="number" name="x" min="0" max="1000" required>
 
-    <label>Total Population</label>
-    <input type="number" name="total_population" min="0" required>
+        <label>Y Coordinate (0-1000)</label>
+        <input type="number" name="y" min="0" max="1000" required>
 
-    <label>Injured Population</label>
-    <input type="number" name="injured_population" min="0" required>
+        <label>Total Population</label>
+        <input type="number" name="total_population" min="0" required>
 
-    <p id="urgencyPreview"></p>
+        <label>Injured Population</label>
+        <input type="number" name="injured_population" min="0" required>
 
-    <button type="submit">Create Camp</button>
-</form>
+        <p id="urgencyPreview"></p>
 
-<a href="/camp/dashboard">⬅ Back</a>
+        <button type="submit">Create Camp</button>
+    </form>
+
+    <br>
+    <a href="/camp/dashboard" class="btn">Back</a>
+</div>
 
 <script src="/static/script.js"></script>
 </body>

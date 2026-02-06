@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Requests</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <style>
         table { border-collapse: collapse; width: 100%; margin-top: 20px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
@@ -24,7 +25,20 @@
     </style>
 </head>
 <body>
-    <h2>📝 Resource Requests</h2>
+    <div class="sidebar">
+        <div class="sidebar-header">Fair-Share V1</div>
+        <div class="sidebar-section-title">Navigation</div>
+        <a href="{{ url_for('adminBoard') }}" class="sidebar-link">Dashboard</a>
+        <a href="/camps" class="sidebar-link">View All Camps</a>
+        <a href="{{ url_for('warehouse_view') }}" class="sidebar-link">View Warehouse</a>
+        <a href="{{ url_for('admin_requests') }}" class="sidebar-link active">Resource Requests</a>
+        <div class="sidebar-bottom">
+            <a href="/logout" class="sidebar-link">Logout</a>
+        </div>
+    </div>
+
+    <div class="page-content">
+    <h2>Resource Requests</h2>
     
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -101,7 +115,8 @@
     {% endif %}
 
     <br>
-    <a href="{{ url_for('adminBoard') }}">← Back to Dashboard</a>
+    <a href="{{ url_for('adminBoard') }}" class="btn">Back to Dashboard</a>
+    </div>
 
     <script>
         // Individual approve

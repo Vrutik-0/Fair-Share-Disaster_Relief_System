@@ -4,65 +4,51 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-
-    <link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-    <title>Document</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <title>Camp Manager Dashboard</title>
 </head>
 <body>
-    <!-- Notification Bell -->
-    <button id="notif-bell" class="notif-bell">
-        🔔
-        <span id="notif-badge" class="notif-badge hidden">0</span>
-    </button>
+    <!-- Left Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">Fair-Share V1</div>
+        <div class="sidebar-section-title">Navigation</div>
+        <a href="{{ url_for('campBoard') }}" class="sidebar-link active">Dashboard</a>
+        <a href="/camp/add" class="sidebar-link">Add Camp</a>
+        <a href="/camps" class="sidebar-link">View All Camps</a>
+        <div class="sidebar-section-title">Requests</div>
+        <a href="{{ url_for('create_request') }}" class="sidebar-link">New Resource Request</a>
+        <a href="{{ url_for('view_my_requests') }}" class="sidebar-link">My Requests</a>
+        <div class="sidebar-section-title">Warehouse</div>
+        <a href="{{ url_for('warehouse_view') }}" class="sidebar-link">View Inventory</a>
+        <div class="sidebar-bottom">
+            <a href="/logout" class="sidebar-link">Logout</a>
+        </div>
+    </div>
 
     <!-- Toast Alerts -->
     <div id="notif-toasts" class="notif-toast-container"></div>
 
-    <!-- Notification Sidebar -->
-    <div id="notif-overlay" class="notif-overlay"></div>
-    <div id="notif-sidebar" class="notif-sidebar">
-        <div class="notif-sidebar-header">
-            <h3>🔔 Notifications</h3>
-            <div>
-                <button id="notif-mark-read" class="notif-mark-read">Mark all read</button>
-                <button onclick="document.getElementById('notif-sidebar').classList.remove('open');document.getElementById('notif-overlay').classList.remove('show');">✕</button>
+    <div class="page-content">
+        <h2>Camp Manager Dashboard</h2>
+        <p>Welcome, {{ session['name'] }}</p>
+
+        <h3>Camp Map</h3>
+        <div class="map-notif-row">
+            <div id="map" style="height: 400px; width: 500px;"></div>
+            <div class="notif-inline-box" style="height: 400px;">
+                <div class="notif-inline-header">
+                    <span>Notifications</span>
+                    <span id="notif-unread-dot" class="notif-unread-dot hidden"></span>
+                    <button id="notif-mark-read-inline" class="mark-read-link">Mark all read</button>
+                </div>
+                <div id="notif-inline-list" class="notif-inline-list">
+                    <div class="notif-empty">Loading...</div>
+                </div>
             </div>
         </div>
-        <div id="notif-list" class="notif-list">
-            <div class="notif-empty">Loading...</div>
-        </div>
     </div>
-    
-<h2>Camp Manager Dashboard</h2>
-<p>Welcome, {{ session['name'] }}</p>
 
-<a href="/camp/add" class="btn"> Add Camp</a><br>
-
-<a href="/camps" class="btn"> View All Camps</a><br>
-<h3>Camp Map</h3>
-<div id="map" style="height: 400px; width: 500px;"></div>
-<h3>Requests</h3>
-
-<a href="{{ url_for('create_request') }}" class="btn">
-     New Resource Request
-</a>
-<a href="{{ url_for('view_my_requests') }}" class="btn">
-     My Requests
-</a>
-
-<h3>Warehouse</h3>
-<a href="{{ url_for('warehouse_view') }}" class="btn">
-     View Warehouse Inventory
-</a>
-
-<a href="/logout">Logout</a>
-
-<script src="/static/script.js"></script>
-
+    <script src="/static/script.js"></script>
 </body>
 </html>

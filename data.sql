@@ -90,6 +90,7 @@ CREATE TABLE requests (
     camp_id INTEGER NOT NULL REFERENCES camps(camp_id) ON DELETE CASCADE,
     item_type VARCHAR(30) NOT NULL
         CHECK (item_type IN ('food', 'water', 'medicine-kit', 'other')),
+    item_name VARCHAR(100),                   -- Optional name when item_type is 'other'
     quantity_needed INTEGER NOT NULL
         CHECK (quantity_needed > 0),
     fulfilled_quantity INTEGER DEFAULT 0

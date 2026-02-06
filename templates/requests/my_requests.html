@@ -1,21 +1,68 @@
-<h2>My Resource Requests</h2>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>My Requests</title>
+    <style>
+        .status-pending { color: #856404; }
+        .status-approved { color: #155724; font-weight: bold; }
+        .status-partially_approved { color: #0c5460; }
+        .status-discarded { color: #721c24; }
+        .status-delivered { color: #155724; }
+    </style>
+</head>
+<body>
+    <!-- Left Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">Fair-Share V1</div>
+        <div class="sidebar-section-title">Navigation</div>
+        <a href="{{ url_for('campBoard') }}" class="sidebar-link">Dashboard</a>
+        <a href="/camp/add" class="sidebar-link">Add Camp</a>
+        <a href="/camps" class="sidebar-link">View All Camps</a>
+        <div class="sidebar-section-title">Requests</div>
+        <a href="{{ url_for('create_request') }}" class="sidebar-link">New Resource Request</a>
+        <a href="{{ url_for('view_my_requests') }}" class="sidebar-link active">My Requests</a>
+        <div class="sidebar-section-title">Warehouse</div>
+        <a href="{{ url_for('warehouse_view') }}" class="sidebar-link">View Inventory</a>
+        <div class="sidebar-bottom">
+            <a href="/logout" class="sidebar-link">Logout</a>
+        </div>
+    </div>
 
-<table>
-<tr>
-    <th>Item</th>
-    <th>Requested</th>
-    <th>Fulfilled</th>
-    <th>Status</th>
-    <th>Admin Message</th>
-</tr>
+    <div class="page-content">
+        <h2>My Resource Requests</h2>
 
-{% for r in requests %}
-<tr>
-    <td>{{ r[0] }}</td>
-    <td>{{ r[1] }}</td>
-    <td>{{ r[2] }}</td>
-    <td>{{ r[3] }}</td>
-    <td>{{ r[4] or '-' }}</td>
-</tr>
-{% endfor %}
-</table>
+        {% if requests %}
+        <table class="simple-table">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Requested</th>
+                    <th>Fulfilled</th>
+                    <th>Status</th>
+                    <th>Admin Note</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in requests %}
+                <tr>
+                    <td>{{ r[0] }}</td>
+                    <td>{{ r[1] }}</td>
+                    <td>{{ r[2] }}</td>
+                    <td><span class="status-{{ r[3] }}">{{ r[3] }}</span></td>
+                    <td>{{ r[4] or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No requests yet.</p>
+        {% endif %}
+
+        <br>
+        <a href="{{ url_for('campBoard') }}" class="btn">Back to Dashboard</a>
+    </div>
+</body>
+</html>
