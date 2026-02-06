@@ -59,7 +59,7 @@ function initAdminMap() {
         color: "blue",
         fillColor: "blue",
         fillOpacity: 0.9
-    }).addTo(adminMap).bindTooltip("🏭 NGO / Warehouse", { permanent: true });
+    }).addTo(adminMap).bindTooltip( { permanent: true });
 
     // Load camps
     loadCampsOnAdminMap();
@@ -253,5 +253,135 @@ document.querySelectorAll('.flash-success, .flash-warning, .flash-error').forEac
         setTimeout(() => el.remove(), 500);
     }, 5000);
 });
+
+// ======================== NOTIFICATION SYSTEM ========================
+
+let _notifLastCount = 0;
+let _notifKnownIds = new Set();
+
+function notifInit() {
+    const bell = document.getElementById('notif-bell');
+    if (!bell) return;
+
+    // Initial fetch
+    notifPollCount();
+    notifLoadHistory();
+
+    // Poll every 8 seconds
+    setInterval(notifPollCount, 8000);
+    setInterval(notifLoadHistory, 15000);
+
+    // Bell click
+    bell.addEventListener('click', () => {
+        const sidebar = document.getElementById('notif-sidebar');
+        const overlay = document.getElementById('notif-overlay');
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('show');
+    });
+
+    // Overlay click closes sidebar
+    document.getElementById('notif-overlay')?.addEventListener('click', () => {
+        document.getElementById('notif-sidebar').classList.remove('open');
+        document.getElementById('notif-overlay').classList.remove('show');
+    });
+
+    // Mark all read button
+    document.getElementById('notif-mark-read')?.addEventListener('click', () => {
+        fetch('/api/notifications/mark-read', { method: 'POST' })
+            .then(() => {
+                notifPollCount();
+                notifLoadHistory();
+            });
+    });
+}
+
+async function notifPollCount() {
+    try {
+        const res = await fetch('/api/notifications/unread-count');
+        const data = await res.json();
+        const badge = document.getElementById('notif-badge');
+        if (!badge) return;
+
+        if (data.count > 0) {
+            badge.textContent = data.count;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+
+        // If count increased, fetch new notifications for toasts
+        if (data.count > _notifLastCount) {
+            notifShowNewToasts();
+        }
+        _notifLastCount = data.count;
+    } catch (e) {
+        // silently ignore polling errors
+    }
+}
+
+async function notifLoadHistory() {
+    try {
+        const res = await fetch('/api/notifications');
+        const data = await res.json();
+        const list = document.getElementById('notif-list');
+        if (!list) return;
+
+        if (data.length === 0) {
+            list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
+            return;
+        }
+
+        // Track known IDs for toast deduplication
+        data.forEach(n => _notifKnownIds.add(n.id));
+
+        list.innerHTML = data.map(n => `
+            <div class="notif-item ${n.is_read ? '' : 'unread'}">
+                <span class="notif-dot ${n.level}"></span>
+                <div class="notif-body">
+                    <div>${n.message}</div>
+                    <div class="notif-time">${n.time}</div>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) { /* ignore */ }
+}
+
+async function notifShowNewToasts() {
+    try {
+        const res = await fetch('/api/notifications');
+        const data = await res.json();
+        const container = document.getElementById('notif-toasts');
+        if (!container) return;
+
+        // Show toast for notifications we haven't seen yet
+        data.filter(n => !n.is_read && !_notifKnownIds.has(n.id)).forEach(n => {
+            _notifKnownIds.add(n.id);
+            const toast = document.createElement('div');
+            toast.className = `notif-toast ${n.level}`;
+            toast.textContent = n.message;
+            toast.addEventListener('click', () => {
+                toast.style.animation = 'fadeOut 0.3s ease-out forwards';
+                setTimeout(() => toast.remove(), 300);
+            });
+            container.appendChild(toast);
+
+            // Auto-dismiss after 6 seconds
+            setTimeout(() => {
+                toast.style.animation = 'fadeOut 0.3s ease-out forwards';
+                setTimeout(() => toast.remove(), 300);
+            }, 6000);
+        });
+
+        // Update history
+        notifLoadHistory();
+    } catch (e) { /* ignore */ }
+}
+
+// Initialize on page load
+if (document.getElementById('notif-bell')) {
+    notifInit();
+}
+
+// ======================== END NOTIFICATION SYSTEM ========================
 
 console.log("Fair-Share V1 successfull 🦆");

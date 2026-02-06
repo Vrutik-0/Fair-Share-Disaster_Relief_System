@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from db import get_db_connection
 import os
@@ -114,6 +114,63 @@ def execution_locked():
     cur.close()
     conn.close()
     return locked
+
+
+# ---- Notification Helpers ----
+
+def notify(user_id, message, level='info', cur=None):
+    """Insert a notification for a specific user.
+    If a cursor is provided, use it (caller manages commit). Otherwise open a new connection."""
+    if cur:
+        cur.execute(
+            "INSERT INTO notifications (user_id, message, level) VALUES (%s, %s, %s)",
+            (user_id, message, level)
+        )
+    else:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO notifications (user_id, message, level) VALUES (%s, %s, %s)",
+            (user_id, message, level)
+        )
+        conn.commit()
+        c.close()
+        conn.close()
+
+
+def notify_role(role, message, level='info', cur=None):
+    """Send a notification to ALL users with a given role."""
+    if cur:
+        cur.execute("SELECT id FROM users WHERE role = %s", (role,))
+        for row in cur.fetchall():
+            cur.execute(
+                "INSERT INTO notifications (user_id, message, level) VALUES (%s, %s, %s)",
+                (row[0], message, level)
+            )
+    else:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT id FROM users WHERE role = %s", (role,))
+        for row in c.fetchall():
+            c.execute(
+                "INSERT INTO notifications (user_id, message, level) VALUES (%s, %s, %s)",
+                (row[0], message, level)
+            )
+        conn.commit()
+        c.close()
+        conn.close()
+
+
+def check_low_stock(cur):
+    """Check warehouse for items at or below threshold and notify admins."""
+    cur.execute("""
+        SELECT item_type, quantity, low_stock_threshold
+        FROM warehouse_inventory
+        WHERE quantity <= low_stock_threshold AND low_stock_threshold > 0
+    """)
+    low_items = cur.fetchall()
+    for item_type, qty, threshold in low_items:
+        notify_role('admin', f"⚠️ Low stock: {item_type} is at {qty} (threshold: {threshold})", 'danger', cur)
 
 
 app = Flask(__name__)
@@ -460,6 +517,11 @@ def create_request():
             VALUES (%s, %s, %s, %s)
         """, (camp_id, item_type, quantity, priority))
 
+        # Get camp name for notification
+        cur.execute("SELECT name FROM camps WHERE camp_id = %s", (camp_id,))
+        camp_name = cur.fetchone()[0]
+        notify_role('admin', f"📋 New {priority} request: {quantity} {item_type} from {camp_name}", 'info', cur)
+
         conn.commit()
         cur.close()
         conn.close()
@@ -630,6 +692,20 @@ def approve_request():
         WHERE request_id = %s
     """, (new_fulfilled, new_status, request_id))
 
+    # Notify the camp manager who owns this request
+    cur.execute("""
+        SELECT c.manager_id, c.name, r.item_type
+        FROM requests r JOIN camps c ON r.camp_id = c.camp_id
+        WHERE r.request_id = %s
+    """, (request_id,))
+    row = cur.fetchone()
+    if row and row[0]:
+        if new_status == 'approved':
+            notify(row[0], f"✅ Request fully approved: {alloc} {row[2]} for {row[1]}", 'success', cur)
+        else:
+            notify(row[0], f"⚠️ Request partially approved: {alloc}/{needed} {row[2]} for {row[1]}", 'warning', cur)
+    check_low_stock(cur)
+
     conn.commit()
     cur.close()
     conn.close()
@@ -673,6 +749,14 @@ def discard_request():
     conn = get_db_connection()
     cur = conn.cursor()
 
+    # Get camp info for notification before discarding
+    cur.execute("""
+        SELECT c.manager_id, c.name, r.item_type, r.quantity_needed
+        FROM requests r JOIN camps c ON r.camp_id = c.camp_id
+        WHERE r.request_id = %s
+    """, (request_id,))
+    info = cur.fetchone()
+
     cur.execute("""
         UPDATE requests
         SET status = 'discarded',
@@ -680,6 +764,10 @@ def discard_request():
             last_updated = CURRENT_TIMESTAMP
         WHERE request_id = %s
     """, (note, request_id))
+
+    # Notify camp manager about discard
+    if info and info[0]:
+        notify(info[0], f"❌ Request discarded: {info[3]} {info[2]} for {info[1]} — Reason: {note}", 'danger', cur)
 
     conn.commit()
     cur.close()
@@ -773,10 +861,24 @@ def approve_all_requests():
             WHERE request_id = %s
         """, (new_fulfilled, new_status, request_id))
         
+        # Notify camp manager about approval
+        cur.execute("""
+            SELECT c.manager_id, c.name
+            FROM requests r JOIN camps c ON r.camp_id = c.camp_id
+            WHERE r.request_id = %s
+        """, (request_id,))
+        mgr_row = cur.fetchone()
+        if mgr_row and mgr_row[0]:
+            if new_status == 'approved':
+                notify(mgr_row[0], f"✅ Request fully approved: {actual_alloc} {item_type} for {mgr_row[1]}", 'success', cur)
+            else:
+                notify(mgr_row[0], f"⚠️ Request partially approved: {actual_alloc}/{needed} {item_type} for {mgr_row[1]}", 'warning', cur)
+
         print(f"    ALLOCATED: request_id={request_id}, qty={actual_alloc}, status={new_status}")
         approved_count += 1
         total_allocated += actual_alloc
 
+    check_low_stock(cur)
     conn.commit()
     cur.close()
     conn.close()
@@ -905,6 +1007,17 @@ def assign_trucks():
                 WHERE truck_id = %s
             """, (driver_id, truck_id))
             print(f"Assigned driver {driver_id} to truck {truck_id}")
+
+            # Notify the driver about assignment
+            cur.execute("SELECT truck_number FROM trucks WHERE truck_id = %s", (truck_id,))
+            t_num = cur.fetchone()[0]
+            cur.execute("""
+                SELECT c.name FROM truck_assignments ta
+                JOIN camps c ON ta.camp_id = c.camp_id
+                WHERE ta.truck_id = %s
+            """, (truck_id,))
+            camp_names = [r[0] for r in cur.fetchall()]
+            notify(driver_id, f"🚚 You are assigned to {t_num} — Camps: {', '.join(camp_names)}", 'info', cur)
 
     conn.commit()
     cur.close()
@@ -1499,6 +1612,17 @@ def mark_camp_delivered(camp_id):
           )
     """, (camp_id, truck_id))
 
+    # Notify admin and camp manager about delivery
+    cur.execute("SELECT name, manager_id FROM camps WHERE camp_id = %s", (camp_id,))
+    camp_row = cur.fetchone()
+    cur.execute("SELECT truck_number FROM trucks WHERE truck_id = %s", (truck_id,))
+    t_num = cur.fetchone()[0]
+    driver_name = session.get('name', 'Driver')
+    if camp_row:
+        notify_role('admin', f"📦 Delivery completed: {driver_name} delivered to {camp_row[0]} ({t_num})", 'success', cur)
+        if camp_row[1]:
+            notify(camp_row[1], f"📦 Delivery arrived at {camp_row[0]} via {t_num}", 'success', cur)
+
     # Check if all camps for this truck are delivered
     cur.execute("""
         SELECT COUNT(*)
@@ -1577,6 +1701,77 @@ def reset_execution():
 
     flash("System reset complete. Ready for new delivery cycle.", "success")
     return redirect(url_for("adminBoard"))
+
+
+# ======================== NOTIFICATION API ========================
+
+@app.route("/api/notifications")
+def api_notifications():
+    """Get all notifications for current user (latest 50)."""
+    if "user_id" not in session:
+        return jsonify([]), 401
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT notif_id, message, level, is_read, created_at
+        FROM notifications
+        WHERE user_id = %s
+        ORDER BY created_at DESC
+        LIMIT 50
+    """, (session["user_id"],))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    return jsonify([{
+        "id": r[0],
+        "message": r[1],
+        "level": r[2],
+        "is_read": r[3],
+        "time": r[4].strftime("%b %d, %H:%M")
+    } for r in rows])
+
+
+@app.route("/api/notifications/unread-count")
+def api_unread_count():
+    """Get count of unread notifications for current user."""
+    if "user_id" not in session:
+        return jsonify({"count": 0}), 401
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT COUNT(*) FROM notifications
+        WHERE user_id = %s AND is_read = FALSE
+    """, (session["user_id"],))
+    count = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+
+    return jsonify({"count": count})
+
+
+@app.route("/api/notifications/mark-read", methods=["POST"])
+def api_mark_read():
+    """Mark all notifications as read for current user."""
+    if "user_id" not in session:
+        return jsonify({"ok": False}), 401
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        UPDATE notifications SET is_read = TRUE
+        WHERE user_id = %s AND is_read = FALSE
+    """, (session["user_id"],))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return jsonify({"ok": True})
+
+
+# ======================== END NOTIFICATION API ========================
 
 
 #Logout

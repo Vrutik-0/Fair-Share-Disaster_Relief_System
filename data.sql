@@ -188,6 +188,24 @@ INSERT INTO system_state (is_execution_live) VALUES (FALSE);
 
 
 -- ============================================================================
+-- 9. NOTIFICATIONS TABLE
+-- In-app alerts for users (admin, camp_manager, driver)
+-- ============================================================================
+CREATE TABLE notifications (
+    notif_id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    message TEXT NOT NULL,                    -- Notification message text
+    level VARCHAR(10) DEFAULT 'info'         -- 'info', 'success', 'warning', 'danger'
+        CHECK (level IN ('info', 'success', 'warning', 'danger')),
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Index for fast lookup by user
+CREATE INDEX idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
+
+
+-- ============================================================================
 -- USEFUL VIEWS FOR MONITORING
 -- ============================================================================
 

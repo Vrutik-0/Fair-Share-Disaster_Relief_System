@@ -52,6 +52,30 @@
     </style>
 </head>
 <body>
+    <!-- Notification Bell -->
+    <button id="notif-bell" class="notif-bell">
+        🔔
+        <span id="notif-badge" class="notif-badge hidden">0</span>
+    </button>
+
+    <!-- Toast Alerts -->
+    <div id="notif-toasts" class="notif-toast-container"></div>
+
+    <!-- Notification Sidebar -->
+    <div id="notif-overlay" class="notif-overlay"></div>
+    <div id="notif-sidebar" class="notif-sidebar">
+        <div class="notif-sidebar-header">
+            <h3>🔔 Notifications</h3>
+            <div>
+                <button id="notif-mark-read" class="notif-mark-read">Mark all read</button>
+                <button onclick="document.getElementById('notif-sidebar').classList.remove('open');document.getElementById('notif-overlay').classList.remove('show');">✕</button>
+            </div>
+        </div>
+        <div id="notif-list" class="notif-list">
+            <div class="notif-empty">Loading...</div>
+        </div>
+    </div>
+
     <h2>🚚 Driver Dashboard</h2>
     <p>Welcome, <strong>{{ session['name'] }}</strong></p>
 
@@ -210,5 +234,6 @@
             })
             .catch(err => console.error("Error loading route:", err));
     </script>
+    <script src="/static/script.js"></script>
 </body>
 </html>
