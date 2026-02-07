@@ -257,21 +257,21 @@ document.querySelectorAll('.flash-success, .flash-warning, .flash-error').forEac
 let _notifLastCount = 0;
 let _notifKnownIds = new Set();
 
-function notifInit() {
+async function notifInit() {
     const notifBtn = document.getElementById('notif-btn');
     const inlineList = document.getElementById('notif-inline-list');
 
     if (!notifBtn && !inlineList) return;
 
-    // Initial fetch
-    notifPollCount();
-    notifLoadHistory();
+    // Seed known IDs first so the initial poll doesn't alert old notifications
+    await notifLoadHistory();
+    await notifPollCount();
 
     // Poll every 8 seconds
     setInterval(notifPollCount, 8000);
     setInterval(notifLoadHistory, 15000);
 
-    // Panel mode (sub-pages with sidebar notif button)
+    // Panel mode
     if (notifBtn) {
         notifBtn.addEventListener('click', () => {
             const panel = document.getElementById('notif-panel');
@@ -322,7 +322,7 @@ async function notifPollCount() {
             }
         }
 
-        // Inline blue dot mode (dashboards)
+        // Inline blue dot mode
         const dot = document.getElementById('notif-unread-dot');
         if (dot) {
             if (data.count > 0) {
@@ -346,7 +346,7 @@ async function notifLoadHistory() {
     try {
         const res = await fetch('/api/notifications');
         const data = await res.json();
-        // Inline list (dashboards) takes priority, fallback to panel list (sub-pages)
+        // Inline list takes priority
         const list = document.getElementById('notif-inline-list') || document.getElementById('notif-list');
         if (!list) return;
 
@@ -374,31 +374,26 @@ async function notifShowNewToasts() {
     try {
         const res = await fetch('/api/notifications');
         const data = await res.json();
-        const container = document.getElementById('notif-toasts');
-        if (!container) return;
 
-        // Show toast for notifications we haven't seen yet
-        data.filter(n => !n.is_read && !_notifKnownIds.has(n.id)).forEach(n => {
-            _notifKnownIds.add(n.id);
-            const toast = document.createElement('div');
-            toast.className = `notif-toast ${n.level}`;
-            toast.textContent = n.message;
-            toast.addEventListener('click', () => {
-                toast.style.animation = 'fadeOut 0.3s ease-out forwards';
-                setTimeout(() => toast.remove(), 300);
-            });
-            container.appendChild(toast);
+        // Find notifications we haven't alerted yet
+        const newNotifs = data.filter(n => !n.is_read && !_notifKnownIds.has(n.id));
+        if (newNotifs.length === 0) return;
 
-            // Auto-dismiss after 6 seconds
-            setTimeout(() => {
-                toast.style.animation = 'fadeOut 0.3s ease-out forwards';
-                setTimeout(() => toast.remove(), 300);
-            }, 6000);
-        });
+        // Mark them as known so we don't alert again
+        newNotifs.forEach(n => _notifKnownIds.add(n.id));
 
-        // Update history
+        // Simple alert popup
+        if (newNotifs.length === 1) {
+            alert("Notification: " + newNotifs[0].message);
+        } else {
+            alert("New Notifications:\n\n" + newNotifs.map(n => "• " + n.message).join("\n"));
+        }
+
+        // Update history panel
         notifLoadHistory();
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+        console.error('notifShowNewToasts error:', e);
+    }
 }
 
 // Initialize on page load — inline mode (dashboards) or panel mode (sub-pages)

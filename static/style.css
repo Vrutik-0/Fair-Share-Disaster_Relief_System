@@ -1,7 +1,7 @@
 body {
     font-family: Arial, sans-serif;
     background: #f4f4f4;
-    margin: 0;
+    margin: 0;  
     padding: 0;
 }
 
@@ -12,7 +12,7 @@ body {
     left: 0;
     width: 220px;
     height: 100vh;
-    background: #1e293b;
+    background: #3d4249;
     color: #fff;
     display: flex;
     flex-direction: column;
@@ -36,7 +36,7 @@ body {
     transition: background 0.2s;
 }
 .sidebar a.sidebar-link:hover {
-    background: #334155;
+    background: #4c5969;
     color: #fff;
 }
 .sidebar a.sidebar-link.active {
@@ -52,10 +52,10 @@ body {
 }
 .sidebar-bottom {
     margin-top: auto;
-    border-top: 1px solid #334155;
+    border-top: 4px solid #475065;
 }
 .sidebar-bottom a.sidebar-link {
-    border-bottom: none;
+    border-bottom:  4px solid #475065;;
 }
 .sidebar-notif-btn {
     display: block;
@@ -294,7 +294,7 @@ button:hover {
     to   { opacity: 0; transform: translateX(40px); }
 }
 
-/* ===== Inline Notification Box (beside map) ===== */
+/* ===== Notification Box (beside map) ===== */
 .map-notif-row {
     display: flex;
     gap: 20px;
@@ -348,7 +348,6 @@ button:hover {
     padding: 0;
 }
 
-/* ===== Simple tables ===== */
 table.simple-table {
     width: 100%;
     border-collapse: collapse;

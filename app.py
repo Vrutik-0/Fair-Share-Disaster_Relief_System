@@ -562,7 +562,6 @@ def admin_requests():
     """)
 
     rows = cur.fetchall()
-    print(f"ADMIN REQUESTS - Found {len(rows)} pending requests")
 
     # Convert to list of dicts
     pending_reqs = []
@@ -603,7 +602,6 @@ def admin_requests():
         )
         stock_row = cur.fetchone()
         stock = stock_row[0] if stock_row else 0
-        print(f"  Item type '{item_type}': stock={stock}")
 
         # compute total weighted demand
         total_weight = 0
@@ -620,7 +618,6 @@ def admin_requests():
                 weight = PRIORITY_WEIGHT[r["priority"]] * remaining
                 suggested = int(stock * (weight / total_weight))
                 r["suggested_qty"] = min(suggested, remaining)
-            print(f"    Request {r['request_id']}: suggested_qty={r['suggested_qty']}")
 
     cur.close()
     conn.close()
@@ -704,9 +701,9 @@ def approve_request():
     row = cur.fetchone()
     if row and row[0]:
         if new_status == 'approved':
-            notify(row[0], f"✅ Request fully approved: {alloc} {row[2]} for {row[1]}", 'success', cur)
+            notify(row[0], f"Request fully approved: {alloc} {row[2]} for {row[1]}", 'success', cur)
         else:
-            notify(row[0], f"⚠️ Request partially approved: {alloc}/{needed} {row[2]} for {row[1]}", 'warning', cur)
+            notify(row[0], f"Request partially approved: {alloc}/{needed} {row[2]} for {row[1]}", 'warning', cur)
     check_low_stock(cur)
 
     conn.commit()
@@ -770,7 +767,7 @@ def discard_request():
 
     # Notify camp manager about discard
     if info and info[0]:
-        notify(info[0], f"❌ Request discarded: {info[3]} {info[2]} for {info[1]} — Reason: {note}", 'danger', cur)
+        notify(info[0], f"Request discarded: {info[3]} {info[2]} for {info[1]} — Reason: {note}", 'danger', cur)
 
     conn.commit()
     cur.close()
@@ -800,7 +797,6 @@ def approve_all_requests():
     """)
 
     pending_requests = cur.fetchall()
-    print(f"APPROVE ALL - Found {len(pending_requests)} pending requests")
     
     approved_count = 0
     total_allocated = 0
@@ -809,8 +805,7 @@ def approve_all_requests():
         request_id, item_type, needed, fulfilled = r
         field = f"alloc_{request_id}"
         raw_value = request.form.get(field, "0").strip()
-        
-        print(f"  Request {request_id}: field={field}, raw_value='{raw_value}'")
+    
         
         # Parse allocation amount - handle empty or non-numeric values
         try:
@@ -873,9 +868,9 @@ def approve_all_requests():
         mgr_row = cur.fetchone()
         if mgr_row and mgr_row[0]:
             if new_status == 'approved':
-                notify(mgr_row[0], f"✅ Request fully approved: {actual_alloc} {item_type} for {mgr_row[1]}", 'success', cur)
+                notify(mgr_row[0], f"Request fully approved: {actual_alloc} {item_type} for {mgr_row[1]}", 'success', cur)
             else:
-                notify(mgr_row[0], f"⚠️ Request partially approved: {actual_alloc}/{needed} {item_type} for {mgr_row[1]}", 'warning', cur)
+                notify(mgr_row[0], f" Request partially approved: {actual_alloc}/{needed} {item_type} for {mgr_row[1]}", 'warning', cur)
 
         print(f"    ALLOCATED: request_id={request_id}, qty={actual_alloc}, status={new_status}")
         approved_count += 1
@@ -886,7 +881,6 @@ def approve_all_requests():
     cur.close()
     conn.close()
 
-    print(f"APPROVE ALL COMPLETE: {approved_count} requests, {total_allocated} units")
 
     if approved_count > 0:
         flash(f"Successfully approved {approved_count} requests (total: {total_allocated} units)", "success")
@@ -977,12 +971,6 @@ def assign_trucks():
     #clustering
     from Algo.clustering import cluster_camps
     clusters = cluster_camps(camps, trucks)
-    
-    print(f"ASSIGN TRUCKS - Camps with scheduled deliveries: {len(camps)}")
-    print(f"ASSIGN TRUCKS - Available trucks: {trucks}")
-    print(f"ASSIGN TRUCKS - Clusters created: {len(clusters)}")
-    for cluster_idx, camp_list in clusters.items():
-        print(f"  Cluster {cluster_idx}: {len(camp_list)} camps - {[c['name'] for c in camp_list]}")
 
     #Clear old assignments
     cur.execute("DELETE FROM truck_assignments")
@@ -995,7 +983,6 @@ def assign_trucks():
             continue
         truck_id = trucks[i]
         assigned_truck_ids.append(truck_id)
-        print(f"  Assigning truck {truck_id} to cluster {i} ({len(camp_list)} camps)")
 
         for camp in camp_list:
             cur.execute("""
@@ -1019,7 +1006,6 @@ def assign_trucks():
                 SET driver_id = %s
                 WHERE truck_id = %s
             """, (driver_id, truck_id))
-            print(f"Assigned driver {driver_id} to truck {truck_id}")
 
             # Notify the driver about assignment
             cur.execute("SELECT truck_number FROM trucks WHERE truck_id = %s", (truck_id,))
@@ -1037,7 +1023,6 @@ def assign_trucks():
     conn.close()
 
     flash(f"Assigned {len(clusters)} trucks to {len(camps)} camps across {len(clusters)} clusters.", "success")
-    print("Truck assignments updated")
 
     return redirect(url_for("adminBoard"))
 
@@ -1118,7 +1103,6 @@ def greedy_prioritization():
     conn.close()
 
     flash("Greedy prioritization applied - camps ordered by urgency within each cluster.", "success")
-    print("Greedy prioritization applied successfully")
 
     return redirect(url_for("adminBoard"))
 
@@ -1216,7 +1200,6 @@ def load_trucks():
     conn.close()
 
     flash("Trucks loaded using knapsack optimization - ready for execution.", "success")
-    print("Trucks loaded using knapsack optimization")
 
     return redirect(url_for("adminBoard"))
 
@@ -1272,8 +1255,7 @@ def get_truck_routes():
 
         edges = []
         
-        # Build a single polyline from depot through all camps
-        # Format: [[depot], [camp1], [camp2], ...]
+        # Build a line from depot through camps
         route_points = [[DEPOT_Y, DEPOT_X]]  # Start with depot [y, x] for Leaflet
         
         for camp in camp_list:
@@ -1289,12 +1271,6 @@ def get_truck_routes():
             "route_points": route_points,  # Full polyline for easier drawing
             "camps": [{"name": c["name"], "urgency": c["urgency"], "order": c["visit_order"], "x": c["x"], "y": c["y"]} for c in camp_list]
         })
-    
-    print(f"TRUCK ROUTES: {len(routes)} routes generated")
-    for r in routes:
-        print(f"  Truck {r['truck_id']}: {len(r['camps'])} camps, {len(r['edges'])} edges")
-        for c in r['camps']:
-            print(f"    Camp '{c['name']}': x={c['x']}, y={c['y']}")
 
     return {"routes": routes, "depot": {"x": DEPOT_X, "y": DEPOT_Y}}
 
