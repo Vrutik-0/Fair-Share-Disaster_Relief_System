@@ -19,5 +19,9 @@
 
 <p>No account? <a href="/signup">Sign Up</a></p>
 
+{% if error %}
+<script>alert("{{ error }}");</script>
+{% endif %}
+
 </body>
 </html>

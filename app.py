@@ -244,16 +244,17 @@ def login():
                     flash("Invalid role", "error")
                     return redirect(url_for("login"))
             
-            flash("Invalid email or password", "error")
+            return redirect(url_for("login", error="Invalid email or password"))
             
         except Exception as e:
-            flash(f"Login error: {str(e)}", "error")
+            return redirect(url_for("login", error=f"Login error: {str(e)}"))
             
         finally:
             cur.close()
             conn.close()
 
-    return render_template("login.html")
+    error = request.args.get("error")
+    return render_template("login.html", error=error)
 
 @app.route("/admin/dashboard")
 def adminBoard():
@@ -609,15 +610,30 @@ def admin_requests():
             remaining = r["quantity_needed"] - r["fulfilled_quantity"]
             total_weight += PRIORITY_WEIGHT[r["priority"]] * remaining
 
-        # compute allocation for each request
+        # compute allocation using largest-remainder method
+        # (avoids int() truncation losing stock when individual shares < 1)
+        alloc_data = []
         for r in reqs:
             remaining = r["quantity_needed"] - r["fulfilled_quantity"]
-            if total_weight == 0 or remaining <= 0:
-                r["suggested_qty"] = 0
+            if total_weight == 0 or remaining <= 0 or stock <= 0:
+                alloc_data.append((r, 0, 0.0, remaining))
             else:
                 weight = PRIORITY_WEIGHT[r["priority"]] * remaining
-                suggested = int(stock * (weight / total_weight))
-                r["suggested_qty"] = min(suggested, remaining)
+                exact = stock * (weight / total_weight)
+                floor_val = int(exact)
+                alloc_data.append((r, floor_val, exact - floor_val, remaining))
+
+        total_floor = sum(a[1] for a in alloc_data)
+        leftover = stock - total_floor
+
+        # sort by fractional part descending to distribute leftovers
+        alloc_data.sort(key=lambda x: x[2], reverse=True)
+
+        for i, (r, floor_val, frac, remaining) in enumerate(alloc_data):
+            if i < leftover and remaining > floor_val:
+                r["suggested_qty"] = min(floor_val + 1, remaining)
+            else:
+                r["suggested_qty"] = min(floor_val, remaining)
 
     cur.close()
     conn.close()
@@ -801,12 +817,15 @@ def approve_all_requests():
     approved_count = 0
     total_allocated = 0
 
+    # Pre-fetch all warehouse stock into memory for accurate tracking
+    cur.execute("SELECT item_type, quantity FROM warehouse_inventory")
+    stock_tracker = {row[0]: row[1] for row in cur.fetchall()}
+
     for r in pending_requests:
         request_id, item_type, needed, fulfilled = r
         field = f"alloc_{request_id}"
         raw_value = request.form.get(field, "0").strip()
-    
-        
+
         # Parse allocation amount - handle empty or non-numeric values
         try:
             alloc = int(raw_value) if raw_value else 0
@@ -814,16 +833,10 @@ def approve_all_requests():
             alloc = 0
 
         if alloc <= 0:
-            print(f"    Skipping - alloc={alloc}")
             continue
 
-        # Check warehouse stock
-        cur.execute(
-            "SELECT quantity FROM warehouse_inventory WHERE item_type=%s",
-            (item_type,)
-        )
-        stock_row = cur.fetchone()
-        stock = stock_row[0] if stock_row else 0
+        # Use tracked stock (reflects earlier allocations in this batch)
+        stock = stock_tracker.get(item_type, 0)
 
         # Calculate actual allocation (limited by stock and remaining need)
         remaining = needed - fulfilled
@@ -845,6 +858,9 @@ def approve_all_requests():
                 updated_at = CURRENT_TIMESTAMP
             WHERE item_type = %s
         """, (actual_alloc, item_type))
+
+        # Track stock locally for subsequent iterations
+        stock_tracker[item_type] = stock - actual_alloc
 
         # Update request status
         new_fulfilled = fulfilled + actual_alloc
@@ -936,7 +952,7 @@ def assign_trucks():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # Fetch only camps that have APPROVED allocations with 'scheduled' status
+    # Fetch only camps that have Approevd allocations
     cur.execute("""
         SELECT DISTINCT c.camp_id, c.name, c.cord_x, c.cord_y
         FROM camps c

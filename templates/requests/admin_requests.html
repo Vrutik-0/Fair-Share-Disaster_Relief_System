@@ -6,22 +6,26 @@
     <title>Admin Requests</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <style>
+        form { width: 100%; max-width: 100%; background: none; padding: 0; }
         table { border-collapse: collapse; width: 100%; margin-top: 20px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
         th { background-color: #f4f4f4; }
-        .btn { padding: 8px 16px; cursor: pointer; margin: 2px; border-radius: 4px; }
+        .btn { padding: 8px 16px; cursor: pointer; margin: 2px; border-radius: 4px; width: auto; }
         .btn-approve { background-color: #4CAF50; color: white; border: none; }
         .btn-discard { background-color: #f44336; color: white; border: none; }
-        .btn-approve-all { background-color: #2196F3; color: white; border: none; padding: 12px 24px; font-size: 16px; }
-        input[type="number"] { width: 80px; padding: 5px; }
-        input[type="text"] { padding: 5px; width: 120px; }
+        .btn-approve-all { background-color: #2196F3; color: white; border: none; padding: 12px 24px; font-size: 16px; width: auto; border-radius: 6px; }
+        .btn-approve-all:hover { background-color: #1976D2; }
+        input[type="number"] { width: 80px; padding: 5px; margin-top: 0; }
+        input[type="text"] { padding: 5px; width: 120px; margin-top: 0; }
         .flash-success { background-color: #d4edda; color: #155724; padding: 10px; margin: 10px 0; border-radius: 4px; }
         .flash-error { background-color: #f8d7da; color: #721c24; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .flash-warning { background-color: #fff3cd; color: #856404; padding: 10px; margin: 10px 0; border-radius: 4px; }
         .priority-critical { color: #dc3545; font-weight: bold; }
         .priority-high { color: #fd7e14; font-weight: bold; }
         .priority-medium { color: #007bff; }
         .priority-low { color: #6c757d; }
         .discard-form { display: none; margin-top: 5px; }
+        td button { width: auto; margin-top: 2px; }
     </style>
 </head>
 <body>
@@ -51,7 +55,7 @@
     {% if requests %}
     <!-- Single form for Approve All -->
     <form method="POST" action="{{ url_for('approve_all_requests') }}" id="approveAllForm">
-        <button type="submit" class="btn btn-approve-all">✓ Approve All (with quantities below)</button>
+        <!-- <button type="submit" class="btn btn-approve-all">Approve All</button> -->
         
         <table>
             <thead>
@@ -115,7 +119,6 @@
     {% endif %}
 
     <br>
-    <a href="{{ url_for('adminBoard') }}" class="btn">Back to Dashboard</a>
     </div>
 
     <script>

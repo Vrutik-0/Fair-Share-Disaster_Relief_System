@@ -88,18 +88,24 @@ body {
 
 /*----------------------------------------------------------------------------------------*/
 
-/* Page content shifted to the right */
+/* Page content */
 .page-content {
     margin-left: 220px;
-    padding: 30px;
+    padding: 40px;
 }
 
 form {
-    background: white;
+    background: rgb(231, 231, 231);
     padding: 20px;
     width: 300px;
-    border-radius: 8px;
+    border-radius: 10px;
 }
+
+input, textarea, select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 
 input, select, button {
     width: 100%;

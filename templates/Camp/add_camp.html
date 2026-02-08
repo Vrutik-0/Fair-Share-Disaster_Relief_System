@@ -28,20 +28,20 @@
     <form method="POST" id="campForm">
 
         <input type="text" name="name"
-               placeholder="Camp Name (Unique)"
+               placeholder="Camp Name"
                required>
 
-        <label>X Coordinate (0-1000)</label>
         <input type="number" name="x" min="0" max="1000" required>
+        <label>X Coordinate (0-1000)</label>
 
-        <label>Y Coordinate (0-1000)</label>
         <input type="number" name="y" min="0" max="1000" required>
+        <label>Y Coordinate (0-1000)</label>
 
-        <label>Total Population</label>
         <input type="number" name="total_population" min="0" required>
+        <label>Total Population</label>
 
-        <label>Injured Population</label>
         <input type="number" name="injured_population" min="0" required>
+        <label>Injured Population</label>
 
         <p id="urgencyPreview"></p>
 
