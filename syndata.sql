@@ -1,4 +1,5 @@
 
+
 -- This file contains all test data to populate the database for testing.
 -- Run data.sql FIRST to create the schema, then run this file.
 -- 
@@ -75,19 +76,19 @@ INSERT INTO users (email, password, name, phone, role) VALUES
 
 INSERT INTO camps (name, cord_x, cord_y, total_population, injured_population, urgency_score, status, manager_id) VALUES
 -- Camp Alpha: Critical - near depot, high urgency
-('Alpha', 150, 150, 500, 75, 0.85, 'critical', 2),
+('Alpha', 150, 150, 500, 75, 0.85, 'critical', 1),
 
 -- Camp Beta: Moderate - nearby Alpha (for clustering test)
-('Beta', 200, 200, 300, 30, 0.55, 'moderate', 3),
+('Beta', 200, 200, 300, 30, 0.55, 'moderate', 1),
 
 -- Camp Charlie: Moderate - slightly farther
-('Charlie', 300, 185, 250, 25, 0.50, 'moderate', 4),
+('Charlie', 300, 185, 250, 25, 0.50, 'moderate', 1),
 
 -- Camp Delta: Stable - far from depot
-('Delta', 800, 800, 150, 10, 0.25, 'stable', 5),
+('Delta', 800, 800, 150, 10, 0.25, 'stable', 2),
 
 -- Camp Echo: Critical - far but high urgency
-('Echo', 715, 650, 400, 60, 0.80, 'critical', 6);
+('Echo', 715, 650, 400, 60, 0.80, 'critical', 2);
 
 
 -- ============================================================================
