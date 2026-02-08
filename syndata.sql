@@ -1,3 +1,4 @@
+
 -- This file contains all test data to populate the database for testing.
 -- Run data.sql FIRST to create the schema, then run this file.
 -- 
@@ -15,7 +16,7 @@
 -- ============================================================================
 -- OPTIONAL: Clear existing data (uncomment if needed)
 -- ============================================================================
--- TRUNCATE users, camps, warehouse_inventory, requests, allocations, trucks, truck_assignments RESTART IDENTITY CASCADE;
+-- TRUNCATE users, camps,warehouse_inventory, requests, allocations, trucks, truck_assignments ,notifications RESTART IDENTITY CASCADE;
 
 
 -- ============================================================================

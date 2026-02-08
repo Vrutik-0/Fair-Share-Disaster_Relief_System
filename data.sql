@@ -111,6 +111,7 @@ CREATE TABLE requests (
     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE requests ADD COLUMN item_name VARCHAR(100);
 
 -- ============================================================================
 -- 5. TRUCKS TABLE
