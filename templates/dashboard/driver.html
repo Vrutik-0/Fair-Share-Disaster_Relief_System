@@ -18,26 +18,19 @@
         .status-available { background-color: #d4edda; color: #155724; }
         .status-loading { background-color: #cce5ff; color: #004085; }
         .camp-card {
-            border: 1px solid #ddd;
-            border-radius: 8px;
+            border: 3px solid #CBD5E1;
+            border-radius: 10px;
             padding: 15px;
             margin: 10px 0;
-            background: #f9f9f9;
+            background:#F1F5F9;
         }
-        .camp-card.delivered { background: #d4edda; opacity: 0.7; }
+        .camp-card.delivered { background: #d4edda; opacity: 0.5; }
         .camp-header { display: flex; justify-content: space-between; align-items: center; }
         .stop-number {
-            background: #007bff;
-            color: white;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
             font-weight: bold;
+            font-size: 16px;
         }
-        .urgency-high { border-left: 4px solid red; }
+        .urgency-high { border-left: 4px solid red;}
         .urgency-medium { border-left: 4px solid orange; }
         .urgency-low { border-left: 4px solid green; }
         .items-table { width: 100%; margin-top: 10px; }
@@ -59,7 +52,7 @@
         </div>
     </div>
 
-    <!-- Toast Alerts -->
+    <!-- Toast -->
     <div id="notif-toasts" class="notif-toast-container"></div>
 
     <div class="page-content">
@@ -84,6 +77,16 @@
         {% endif %}
 
         <h3>Route Map</h3>
+
+            
+        <div class="legend" style=" border: #4f4f4f solid 2px; border-radius: 8px;">
+            <span class="legend-item"><span class="legend-color" style="background:blue;"></span> NGO/Warehouse</span>
+            <span class="legend-item"><span class="legend-color" style="background:red;"></span> Critical (&ge;0.7)</span>
+            <span class="legend-item"><span class="legend-color" style="background:orange;"></span> Moderate (0.4-0.7)</span>
+            <span class="legend-item"><span class="legend-color" style="background:green;"></span> Low (&lt;0.4)</span>
+        </div>
+
+
         <div class="map-notif-row">
             <div id="map"></div>
             <div class="notif-inline-box">
@@ -97,9 +100,8 @@
                 </div>
             </div>
         </div>
-        <p><em>Blue = NGO/Warehouse (Start) | Red = Camp Stops (in order)</em></p>
 
-        <h3>Delivery Route (in order)</h3>
+        <h3>Delivery Route</h3>
 
         {% if camps %}
             {% for camp in camps %}
@@ -123,8 +125,8 @@
                 </div>
 
                 {% if camp.delivery_items %}
-                <table class="items-table">
-                    <tr>
+                <table class="items-table" border="2" cellpadding="5" cellspacing="0" style="border: rgb(103, 103, 103) solid 3px;">
+                    <tr >
                         <th>Item</th>
                         <th>Quantity</th>
                     </tr>
@@ -146,7 +148,7 @@
     </div>
 
     <script>
-        // Initialize map
+        // map
         const map = L.map("map", {
             crs: L.CRS.Simple,
             minZoom: -1

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Requests</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    
     <style>
         form { width: 100%; max-width: 100%; background: none; padding: 0; }
         table { border-collapse: collapse; width: 100%; margin-top: 20px; }
@@ -55,6 +56,8 @@
     {% if requests %}
     <!-- Single form for Approve All -->
     <form method="POST" action="{{ url_for('approve_all_requests') }}" id="approveAllForm">
+
+        <!-- Work in Progress -->
         <!-- <button type="submit" class="btn btn-approve-all">Approve All</button> -->
         
         <table>

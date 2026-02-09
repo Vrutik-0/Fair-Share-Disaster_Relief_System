@@ -8,19 +8,17 @@ from Algo.priority import rank_camps_greedy
 from Algo.knapsack import knapsack
 from Algo.routes import greedy_route
 
-
 #NGO Base Coord
 DEPOT_X = 500
 DEPOT_Y = 0
 
-
 def auto_approve_logic(request_id, cur):
-    # get request info
+
+    # get request info - what , how much , etc
     cur.execute("""
         SELECT item_type, quantity_needed, fulfilled_quantity, status
-        FROM requests
-        WHERE request_id = %s
-    """, (request_id,))
+        FROM requests WHERE request_id = %s
+        """, (request_id,))
 
     row = cur.fetchone()
     if not row:
@@ -36,63 +34,56 @@ def auto_approve_logic(request_id, cur):
 
     # get warehouse stock
     cur.execute("""
-        SELECT quantity
-        FROM warehouse_inventory
-        WHERE item_type = %s
-    """, (item_type,))
+        SELECT quantity FROM warehouse_inventory WHERE item_type = %s
+        """, (item_type,))
 
     stock_row = cur.fetchone()
     stock = stock_row[0] if stock_row else 0
 
-    # calculate allocation
+    # allocation
     alloc = min(stock, remaining)
 
     # Empty Stock
     if alloc <= 0:
         cur.execute("""
             UPDATE requests
-            SET status = 'pending',
-                admin_note = 'Insufficient warehouse stock',
-                last_updated = CURRENT_TIMESTAMP
-            WHERE request_id = %s
-        """, (request_id,))
+            SET status = 'pending', admin_note = 'Insufficient stock',
+            last_updated = CURRENT_TIMESTAMP WHERE request_id = %s
+            """, (request_id,))
         return
     
     # Partial or Full
 
     # record allocation
     cur.execute("""
-        INSERT INTO allocations (request_id, allocated_quantity)
-        VALUES (%s, %s)
-    """, (request_id, alloc))
+        INSERT INTO allocations (request_id, allocated_quantity) VALUES (%s, %s)
+        """, (request_id, alloc))
 
     # update warehouse stock
     cur.execute("""
-        UPDATE warehouse_inventory
-        SET quantity = quantity - %s,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE item_type = %s
-    """, (alloc, item_type))
+        UPDATE warehouse_inventory SET quantity = quantity - %s,
+        updated_at = CURRENT_TIMESTAMP WHERE item_type = %s
+        """, (alloc, item_type))
 
     new_fulfilled = fulfilled + alloc
 
     # determine correct status
     if new_fulfilled >= needed:
         new_status = "approved"
-        note = "Request fully approved"
+        msg = "Request fully approved"
     else:
         new_status = "partially_approved"
-        note = "Request partially approved due to limited stock"
+        msg = "Request partially approved due to limited stock"
 
     # update request
     cur.execute("""
         UPDATE requests
         SET fulfilled_quantity = %s,
-            status = %s,
-            admin_note = %s,
-            last_updated = CURRENT_TIMESTAMP
+        status = %s,
+        admin_note = %s,
+        last_updated = CURRENT_TIMESTAMP
         WHERE request_id = %s
-    """, (new_fulfilled, new_status, note, request_id))
+    """, (new_fulfilled, new_status, msg, request_id))
 
 
 def calculate_urgency(total_population, injured_population):
@@ -101,8 +92,7 @@ def calculate_urgency(total_population, injured_population):
 
     score = (
         (injured_population / total_population) * 0.7
-        + (total_population / 1000) * 0.3
-    )
+        + (total_population / 1000) * 0.3 )
 
     return round(min(score, 1.0), 2)
 
@@ -110,14 +100,14 @@ def execution_locked():
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("SELECT is_execution_live FROM system_state WHERE id = 1")
-    locked = cur.fetchone()[0]
+    chk = cur.fetchone()[0]
     cur.close()
     conn.close()
-    return locked
+    return chk
 
+#Insert a notification for a specific user.
 def notify(user_id, message, level='info', cur=None):
-    """Insert a notification for a specific user.
-    If a cursor is provided, use it (caller manages commit). Otherwise open a new connection."""
+    
     if cur:
         cur.execute(
             "INSERT INTO notifications (user_id, message, level) VALUES (%s, %s, %s)",
@@ -134,9 +124,8 @@ def notify(user_id, message, level='info', cur=None):
         c.close()
         conn.close()
 
-
+# Notification for all users at same level/role
 def notify_role(role, message, level='info', cur=None):
-    """Send a notification to ALL users with a given role."""
     if cur:
         cur.execute("SELECT id FROM users WHERE role = %s", (role,))
         for row in cur.fetchall():
@@ -153,13 +142,13 @@ def notify_role(role, message, level='info', cur=None):
                 "INSERT INTO notifications (user_id, message, level) VALUES (%s, %s, %s)",
                 (row[0], message, level)
             )
+
         conn.commit()
         c.close()
         conn.close()
 
-
+# Check for low stock items and notify admin
 def check_low_stock(cur):
-    """Check warehouse for items at or below threshold and notify admins."""
     cur.execute("""
         SELECT item_type, quantity, low_stock_threshold
         FROM warehouse_inventory
@@ -167,7 +156,7 @@ def check_low_stock(cur):
     """)
     low_items = cur.fetchall()
     for item_type, qty, threshold in low_items:
-        notify_role('admin', f"⚠️ Low stock: {item_type} is at {qty} (threshold: {threshold})", 'danger', cur)
+        notify_role('admin', f" Low stock: {item_type} is at {qty} (threshold: {threshold})", 'danger', cur)
 
 
 app = Flask(__name__)
@@ -195,12 +184,11 @@ def signup():
                 """
                 INSERT INTO users (name, email, phone, role, password)
                 VALUES (%s, %s, %s, %s, %s)
-                """,
-                (name, email, phone, role, password)
+                """,(name, email, phone, role, password)
             )
 
             conn.commit()
-            flash("Account created successfully! Please login.", "success")
+            return redirect(url_for("login", msg="Account created successfully! Please login."))
             
         except Exception as e:
             conn.rollback()
@@ -254,7 +242,8 @@ def login():
             conn.close()
 
     error = request.args.get("error")
-    return render_template("login.html", error=error)
+    msg = request.args.get("msg")
+    return render_template("login.html", error=error, msg=msg)
 
 @app.route("/admin/dashboard")
 def adminBoard():
@@ -269,8 +258,7 @@ def adminBoard():
         COUNT(*) AS total_camps,
         COUNT(*) FILTER (WHERE urgency_score >= 0.7) AS critical_camps,
         COUNT(*) FILTER (WHERE urgency_score >= 0.4 AND urgency_score < 0.7) AS moderate_camps,
-        ROUND(AVG(urgency_score)::numeric, 2) AS avg_urgency
-    FROM camps
+        ROUND(AVG(urgency_score)::numeric, 2) AS avg_urgency FROM camps
     """)
 
     stats = cur.fetchone()
@@ -754,9 +742,9 @@ def discard_request():
     print("DISCARD FORM DATA:", request.form)
 
     raw_id = request.form.get("request_id", "").strip()
-    note = request.form.get("admin_note", "").strip()
+    msg = request.form.get("admin_note", "").strip()
 
-    if not raw_id.isdigit() or not note:
+    if not raw_id.isdigit() or not msg:
         print("INVALID DISCARD INPUT")
         return redirect(url_for("admin_requests"))
 
@@ -779,11 +767,11 @@ def discard_request():
             admin_note = %s,
             last_updated = CURRENT_TIMESTAMP
         WHERE request_id = %s
-    """, (note, request_id))
+    """, (msg, request_id))
 
     # Notify camp manager about discard
     if info and info[0]:
-        notify(info[0], f"Request discarded: {info[3]} {info[2]} for {info[1]} — Reason: {note}", 'danger', cur)
+        notify(info[0], f"Request discarded: {info[3]} {info[2]} for {info[1]} — Reason: {msg}", 'danger', cur)
 
     conn.commit()
     cur.close()
@@ -1032,7 +1020,7 @@ def assign_trucks():
                 WHERE ta.truck_id = %s
             """, (truck_id,))
             camp_names = [r[0] for r in cur.fetchall()]
-            notify(driver_id, f"🚚 You are assigned to {t_num} — Camps: {', '.join(camp_names)}", 'info', cur)
+            notify(driver_id, f"You are assigned to {t_num} — Camps: {', '.join(camp_names)}", 'info', cur)
 
     conn.commit()
     cur.close()

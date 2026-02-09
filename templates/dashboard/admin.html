@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <title>Admin Dashboard</title>
@@ -11,39 +11,39 @@
         .flash-success { background-color: #d4edda; color: #155724; padding: 10px; margin: 10px 0; border-radius: 4px; }
         .flash-warning { background-color: #fff3cd; color: #856404; padding: 10px; margin: 10px 0; border-radius: 4px; }
         .flash-error { background-color: #f8d7da; color: #721c24; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        
         .workflow-step { 
             display: block; 
             padding: 12px 16px; 
             background: #3498db; 
             color: white; 
             border: none; 
-            border-radius: 4px; 
+            border-radius: 5px; 
             cursor: pointer;
-            font-size: 14px;
+            font-size: 15px;
         }
         .workflow-step:hover { background: #2980b9; }
         .execute-btn { background: #c0392b !important; }
         .execute-btn:hover { background: #a93226 !important; }
         #admin-map { height: 500px; width: 100%; max-width: 800px; border: 2px solid #333; margin: 10px 0; }
-        .legend { padding: 10px; background: white; border: 1px solid #ccc; margin: 10px 0; display: inline-block; }
-        .legend-item { display: inline-block; margin-right: 15px; }
-        .legend-color { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; }
     </style>
 </head>
 <body>
+    
     <!-- Left Sidebar -->
     <div class="sidebar">
         <div class="sidebar-header">Fair-Share V1</div>
         <a href="{{ url_for('adminBoard') }}" class="sidebar-link active">Dashboard</a>
         <a href="/camps" class="sidebar-link">View All Camps</a>
         <a href="{{ url_for('warehouse_view') }}" class="sidebar-link">View Warehouse</a>
+        
         <a href="{{ url_for('admin_requests') }}" class="sidebar-link">Resource Requests</a>
         <div class="sidebar-bottom">
             <a href="/logout" class="sidebar-link">Logout</a>
         </div>
     </div>
 
-    <!-- Toast Alerts -->
+    <!-- Toast -->
     <div id="notif-toasts" class="notif-toast-container"></div>
 
     <div class="page-content">
@@ -77,12 +77,13 @@
         </div>
 
         <h3>Camp &amp; Route Map</h3>
-        <div class="legend">
+        <div class="legend" style=" border: #4f4f4f solid 2px; border-radius: 8px;">
             <span class="legend-item"><span class="legend-color" style="background:blue;"></span> NGO/Warehouse</span>
             <span class="legend-item"><span class="legend-color" style="background:red;"></span> Critical (&ge;0.7)</span>
             <span class="legend-item"><span class="legend-color" style="background:orange;"></span> Moderate (0.4-0.7)</span>
             <span class="legend-item"><span class="legend-color" style="background:green;"></span> Low (&lt;0.4)</span>
         </div>
+
         <div class="map-notif-row">
             <div id="admin-map"></div>
             <div class="notif-inline-box">
@@ -99,8 +100,8 @@
 
         <h3>Delivery Workflow</h3>
 
-        <div style="width: 50%; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">
-            <p style="margin: 0 0 15px; color: #555;"><em>Execute these steps in order:</em></p>
+        <div style="width: 345px; background: #F8FAFC; border: 5px solid #566975; border-radius: 8px; padding: 20px;">
+            <p style="margin: 0 0 15px; color: #323232;"><em>Execute these steps in order:</em></p>
 
             <div style="margin-bottom: 10px;">
                 <form method="POST" action="{{ url_for('assign_trucks') }}">
@@ -110,7 +111,7 @@
 
             <div style="margin-bottom: 10px;">
                 <form method="POST" action="{{ url_for('greedy_prioritization') }}">
-                    <button class="workflow-step" style="width: 100%; text-align: left;">2. Prioritize Routes (Greedy)</button>
+                    <button class="workflow-step" style="width: 100%; text-align: left;">2. Prioritize Routes</button>
                 </form>
             </div>
 

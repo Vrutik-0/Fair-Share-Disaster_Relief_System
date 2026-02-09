@@ -5,79 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <title>Add Warehouse Stock</title>
-    <style>
-        .form-card {
-            background: #fff;
-            border-radius: 10px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-            max-width: 520px;
-            padding: 0;
-            overflow: hidden;
-        }
-        .form-card-header {
-            background: #16a34a;
-            color: #fff;
-            padding: 18px 28px;
-            font-size: 20px;
-            font-weight: 600;
-        }
-        .form-card-body {
-            padding: 28px;
-        }
-        .form-card-body label {
-            display: block;
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 4px;
-            margin-top: 16px;
-            font-size: 14px;
-        }
-        .form-card-body label:first-child { margin-top: 0; }
-        .form-card-body input,
-        .form-card-body select {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            font-size: 14px;
-            margin-top: 4px;
-            box-sizing: border-box;
-            transition: border-color 0.2s;
-        }
-        .form-card-body input:focus,
-        .form-card-body select:focus {
-            outline: none;
-            border-color: #16a34a;
-            box-shadow: 0 0 0 3px rgba(22,163,74,0.1);
-        }
-        .form-row {
-            display: flex;
-            gap: 16px;
-        }
-        .form-row > div { flex: 1; }
-        .form-card-body button {
-            width: 100%;
-            padding: 12px;
-            background: #16a34a;
-            color: #fff;
-            border: none;
-            border-radius: 6px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 24px;
-            transition: background 0.2s;
-        }
-        .form-card-body button:hover { background: #15803d; }
-        .back-link {
-            display: inline-block;
-            margin-top: 16px;
-            color: #16a34a;
-            text-decoration: none;
-            font-size: 14px;
-        }
-        .back-link:hover { text-decoration: underline; }
-    </style>
 </head>
 <body>
 
@@ -86,56 +13,58 @@
         <div class="sidebar-section-title">Navigation</div>
         <a href="{{ url_for('adminBoard') }}" class="sidebar-link">Dashboard</a>
         <a href="/camps" class="sidebar-link">View All Camps</a>
-        <a href="{{ url_for('warehouse_view') }}" class="sidebar-link active">View Warehouse</a>
+        <a href="{{ url_for('warehouse_view') }}" class="sidebar-link">View Warehouse</a>
         <a href="{{ url_for('admin_requests') }}" class="sidebar-link">Resource Requests</a>
         <div class="sidebar-bottom">
             <a href="/logout" class="sidebar-link">Logout</a>
         </div>
     </div>
 
-    <div class="page-content">
-        <div class="form-card">
-            <div class="form-card-header">Add Warehouse Stock</div>
-            <div class="form-card-body">
-                <form method="POST">
+<div class="page-content">
+    <h2>Add Warehouse Stock</h2>
 
-                    <label>Item Name</label>
-                    <input name="item_name" placeholder="e.g. Rice Bags, Bandages">
+    <form method="POST">
 
-                    <label>Item Type</label>
-                    <select name="item_type" required>
-                        <option value="">— Select Type —</option>
-                        <option value="food">Food</option>
-                        <option value="water">Water</option>
-                        <option value="medicine-kit">Medicine Kit</option>
-                        <option value="other">Other</option>
-                    </select>
+        <input
+            name="item_name"
+            placeholder="Name"
+        >
+        <select name="item_type" required>
+            <option value="">Select</option>
+            <option value="food">Food</option>
+            <option value="water">Water</option>
+            <option value="medicine-kit">Medicine Kit</option>
+            <option value="other">Other</option>
+        </select>
 
-                    <div class="form-row">
-                        <div>
-                            <label>Quantity</label>
-                            <input type="number" name="quantity" placeholder="e.g. 200" min="0" required>
-                        </div>
-                        <div>
-                            <label>Unit</label>
-                            <select name="unit" required>
-                                <option value="">— Unit —</option>
-                                <option value="kg">Kg</option>
-                                <option value="liter">Liter</option>
-                                <option value="units">Units</option>
-                            </select>
-                        </div>
-                    </div>
+        <input
+            type="number"
+            name="quantity"
+            placeholder="Quantity"
+            min="0"
+            required
+        >
+        <select name="unit" required>
+            <option value="">Units</option>
+            <option value="kg">Kg</option>
+            <option value="liter">Liter</option>
+            <option value="units">Units</option>
+        </select>
 
-                    <label>Low Stock Threshold</label>
-                    <input type="number" name="low_stock_threshold" placeholder="Alert when stock falls below this" min="0" required>
+        <input
+            type="number"
+            name="low_stock_threshold"
+            placeholder="Low stock threshold"
+            min="0"
+            required
+        >
 
-                    <button type="submit">Add Stock</button>
-                </form>
-                <a href="{{ url_for('warehouse_view') }}" class="back-link">Back to Warehouse</a>
-            </div>
-        </div>
-    </div>
+        <button type="submit">Add Stock</button>
+    </form>
+
+    <br>
+   <!-- <a href="{{ url_for('warehouse_view') }}" class="btn">Back</a> -->
+</div>
 
 </body>
 </html>

@@ -9,6 +9,7 @@
     <title>Camp Manager Dashboard</title>
 </head>
 <body>
+    
     <!-- Left Sidebar -->
     <div class="sidebar">
         <div class="sidebar-header">Fair-Share V1</div>
@@ -33,6 +34,15 @@
         <p>Welcome, {{ session['name'] }}</p>
 
         <h3>Camp Map</h3>
+
+        
+        <div class="legend" style=" border: #4f4f4f solid 2px; border-radius: 8px;">
+            <span class="legend-item"><span class="legend-color" style="background:blue;"></span> NGO/Warehouse</span>
+            <span class="legend-item"><span class="legend-color" style="background:red;"></span> Critical (&ge;0.7)</span>
+            <span class="legend-item"><span class="legend-color" style="background:orange;"></span> Moderate (0.4-0.7)</span>
+            <span class="legend-item"><span class="legend-color" style="background:green;"></span> Low (&lt;0.4)</span>
+        </div>
+
         <div class="map-notif-row">
             <div id="map" style="height: 400px; width: 500px;"></div>
             <div class="notif-inline-box" style="height: 400px;">
