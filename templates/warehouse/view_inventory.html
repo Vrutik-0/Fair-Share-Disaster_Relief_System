@@ -20,6 +20,7 @@
         </div>
     </div>
     {% elif session.get('role') == 'camp_manager' %}
+
     <div class="sidebar">
         <div class="sidebar-header">Fair-Share V1</div>
         <div class="sidebar-section-title">Navigation</div>
@@ -62,7 +63,7 @@
                     <td>{{ i[2] }}</td>
                     <td>{{ i[3] }}</td>
                     <td>
-                        {% if i[2] < i[4] %}
+                        {% if i[2] < i[4] %} <!-- quantity < low_stock_threshold -->
                             <span style="color:red;">Low Stock</span>
                         {% else %}
                             OK

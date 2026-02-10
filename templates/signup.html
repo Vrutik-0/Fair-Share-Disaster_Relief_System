@@ -5,29 +5,61 @@
     <link rel="stylesheet" href="/static/style.css">
     <style>
         body { display: flex; flex-direction: column; align-items: center; padding-top: 90px; }
+        .error-message { color: #d32f2f; font-size: 14px; margin-top: 5px; display: none; }
+        .form-group { margin-bottom: 15px; }
+        input, select { margin-bottom: 0; }
     </style>
 </head> 
 <body>
 
 <h2>Create Account</h2>
 
-<form method="POST">
+<form id="signupForm" method="POST">
 
-    <input type="text" name="name" placeholder="Full Name" required>
-    <input type="email" name="email" placeholder="Email" required>
-    <input type="tel" name="phone" placeholder="Phone" pattern="[1-9][0-9]{9}" required>
-    
-    <select name="role" required>
-        <option value="admin">Admin</option>
-        <option value="camp_manager">Camp Manager</option>
-        <option value="driver">Driver</option>
-    </select>
+    <div class="form-group">
+        <input type="text" id="signupName" name="name" placeholder="Full Name">
+        <div class="error-message" id="nameError"></div>
+    </div>
 
-    <input type="password" name="password" placeholder="Password" required>
+    <div class="form-group">
+        <input type="email" id="signupEmail" name="email" placeholder="Email">
+        <div class="error-message" id="signupEmailError"></div>
+    </div>
+
+    <div class="form-group">
+        <input type="tel" id="signupPhone" name="phone" placeholder="Phone (10 digits)">
+        <div class="error-message" id="phoneError"></div>
+    </div>
+
+    <div class="form-group">
+        <select id="signupRole" name="role">
+            <option value="">Select Role</option>
+            <option value="admin">Admin</option>
+            <option value="camp_manager">Camp Manager</option>
+            <option value="driver">Driver</option>
+        </select>
+        <div class="error-message" id="roleError"></div>
+    </div>
+
+    <div class="form-group">
+        <input type="password" id="signupPassword" name="password" placeholder="Password">
+        <div class="error-message" id="signupPasswordError"></div>
+    </div>
+
     <button type="submit">Sign Up</button>
 </form>
 
 <p>Already have an account? <a href="/login">Login</a></p>
+
+<script src="/static/script.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('signupForm');
+        if (form) {
+            form.addEventListener('submit', validateSignupForm);
+        }
+    });
+</script>
 
 </body>
 </html>

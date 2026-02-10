@@ -1,4 +1,5 @@
 def knapsack(items, capacity):
+
     n = len(items)
     dp = [[0]*(capacity+1) for _ in range(n+1)]
 
@@ -8,8 +9,7 @@ def knapsack(items, capacity):
 
         for cap in range(capacity+1):
             if w <= cap:
-                dp[i][cap] = max(dp[i-1][cap],
-                                 v + dp[i-1][cap-w])
+                dp[i][cap] = max(dp[i-1][cap],v + dp[i-1][cap-w])
             else:
                 dp[i][cap] = dp[i-1][cap]
 

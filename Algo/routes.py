@@ -10,8 +10,7 @@ def greedy_route(camps, depot, tol=0.03):
         # urgency group
         urgency_group = [
             c for c in remaining
-            if abs(c["urgency"] - max_urgency) <= tol
-        ]
+            if abs(c["urgency"] - max_urgency) <= tol]
 
         # if only one
         if len(urgency_group) == 1:

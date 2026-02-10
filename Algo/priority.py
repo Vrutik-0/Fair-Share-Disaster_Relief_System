@@ -5,24 +5,15 @@ URC = {
     "low": 1
 }
 
+# Compute priority for a camp
 def compute_priority(camp):
-    """
-    camp must contain:
-    - population
-    - urgency (priority)
-    - current_supply
-    """
     urgency_weight = URC.get(camp["urgency"], 1)
     supply = max(camp["current_supply"], 1)
 
     return (camp["population"] * urgency_weight) / supply
 
-
+# Rank camps by priority score
 def rank_camps_greedy(camps):
-    """
-    camps = list of camp dicts
-    returns camps sorted by priority score (desc)
-    """
     for c in camps:
         c["priority_score"] = compute_priority(c)
 

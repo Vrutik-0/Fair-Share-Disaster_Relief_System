@@ -360,6 +360,7 @@ def add_camp():
 
     return render_template("Camp/add_camp.html")
 
+# Provide camp data for map visualizations
 @app.route("/api/camps")
 def api_camps():
     if "role" not in session:
@@ -377,14 +378,15 @@ def api_camps():
     cur.close()
     conn.close()
 
+    #dicts to JSON
     camps = []
     for r in rows:
         camps.append({
             "name": r[0],
-            "x": r[1],   # cord_x
-            "y": r[2],   # cord_y  
-            "lat": r[2], # For Leaflet: lat = cord_y (vertical)
-            "lng": r[1], # For Leaflet: lng = cord_x (horizontal)
+            "x": r[1],   # x-coordinate
+            "y": r[2],   # y-coordinate  
+            "lat": r[2], # For Leaflet: lat = y (vertical)
+            "lng": r[1], # For Leaflet: lng = x (horizontal)
             "urgency": r[3]
         })
 
@@ -400,8 +402,7 @@ def warehouse_view():
 
     cur.execute("""
         SELECT item_name, item_type, quantity, unit, low_stock_threshold
-        FROM warehouse_inventory
-        ORDER BY item_name
+        FROM warehouse_inventory ORDER BY item_name
     """)
 
     items = cur.fetchall()

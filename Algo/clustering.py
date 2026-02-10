@@ -5,6 +5,7 @@ def cluster_camps(camps, trucks):
     if not camps:
         return {}
 
+    # Determine number of clusters/area k on minimum
     k = min(len(trucks), max(2, len(camps) // 2))
 
     points = [[c["x"], c["y"]] for c in camps]

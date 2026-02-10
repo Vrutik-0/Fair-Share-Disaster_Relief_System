@@ -8,15 +8,19 @@
 
     <div class="sidebar">
         <div class="sidebar-header">Fair-Share V1</div>
+
         <div class="sidebar-section-title">Navigation</div>
         <a href="{{ url_for('campBoard') }}" class="sidebar-link">Dashboard</a>
         <a href="/camp/add" class="sidebar-link active">Add Camp</a>
         <a href="/camps" class="sidebar-link">View All Camps</a>
+
         <div class="sidebar-section-title">Requests</div>
         <a href="{{ url_for('create_request') }}" class="sidebar-link">New Resource Request</a>
         <a href="{{ url_for('view_my_requests') }}" class="sidebar-link">My Requests</a>
+        
         <div class="sidebar-section-title">Warehouse</div>
         <a href="{{ url_for('warehouse_view') }}" class="sidebar-link">View Inventory</a>
+        
         <div class="sidebar-bottom">
             <a href="/logout" class="sidebar-link">Logout</a>
         </div>

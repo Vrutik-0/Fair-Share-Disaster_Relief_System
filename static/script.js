@@ -1,7 +1,140 @@
+// ============ LOGIN & SIGNUP VALIDATION ============
+
+// Validator functions
+function isValidEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+}
+
+function isValidPhone(phone) {
+    // Must be 10 digits starting with 1-9
+    const phoneRegex = /^[1-9][0-9]{9}$/;
+    return phoneRegex.test(phone);
+}
+
+function showError(elementId, message) {
+    const errorDiv = document.getElementById(elementId);
+    if (errorDiv) {
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+    }
+}
+
+function hideError(elementId) {
+    const errorDiv = document.getElementById(elementId);
+    if (errorDiv) {
+        errorDiv.textContent = '';
+        errorDiv.style.display = 'none';
+    }
+}
+
+function validateLoginForm(e) {
+    e.preventDefault();
+    let isValid = true;
+
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value.trim();
+
+    // Validate email
+    if (!email) {
+        showError('emailError', 'Email is required');
+        isValid = false;
+    } else if (!isValidEmail(email)) {
+        showError('emailError', 'Please enter a valid email address');
+        isValid = false;
+    } else {
+        hideError('emailError');
+    }
+
+    // Validate password
+    if (!password) {
+        showError('passwordError', 'Password is required');
+        isValid = false;
+    } else {
+        hideError('passwordError');
+    }
+
+    // Submit if valid
+    if (isValid) {
+        document.getElementById('loginForm').submit();
+    }
+}
+
+function validateSignupForm(e) {
+    e.preventDefault();
+    let isValid = true;
+
+    const name = document.getElementById('signupName').value.trim();
+    const email = document.getElementById('signupEmail').value.trim();
+    const phone = document.getElementById('signupPhone').value.trim();
+    const role = document.getElementById('signupRole').value.trim();
+    const password = document.getElementById('signupPassword').value.trim();
+
+    // Validate name
+    if (!name) {
+        showError('nameError', 'Full name is required');
+        isValid = false;
+    } else if (name.length < 2) {
+        showError('nameError', 'Name must be at least 2 characters');
+        isValid = false;
+    } else {
+        hideError('nameError');
+    }
+
+    // Validate email
+    if (!email) {
+        showError('signupEmailError', 'Email is required');
+        isValid = false;
+    } else if (!isValidEmail(email)) {
+        showError('signupEmailError', 'Please enter a valid email address');
+        isValid = false;
+    } else {
+        hideError('signupEmailError');
+    }
+
+    // Validate phone
+    if (!phone) {
+        showError('phoneError', 'Phone number is required');
+        isValid = false;
+    } else if (!isValidPhone(phone)) {
+        showError('phoneError', 'Phone must be 10 digits starting with 1-9 (e.g., 9876543210)');
+        isValid = false;
+    } else {
+        hideError('phoneError');
+    }
+
+    // Validate role
+    if (!role) {
+        showError('roleError', 'Please select a role');
+        isValid = false;
+    } else {
+        hideError('roleError');
+    }
+
+    // Validate password
+    if (!password) {
+        showError('signupPasswordError', 'Password is required');
+        isValid = false;
+    } else if (password.length < 6) {
+        showError('signupPasswordError', 'Password must be at least 6 characters');
+        isValid = false;
+    } else {
+        hideError('signupPasswordError');
+    }
+
+    // Submit if valid
+    if (isValid) {
+        document.getElementById('signupForm').submit();
+    }
+}
+
+// ============ END VALIDATION ============
+
 const totalPop = document.querySelector('input[name="total_population"]');
 const injuredPop = document.querySelector('input[name="injured_population"]');
 const preview = document.getElementById("urgencyPreview");
 
+// Calculates and displays the Urgency Score
 function updateUrgency() {
     const t = parseInt(totalPop?.value || 0);
     const i = parseInt(injuredPop?.value || 0);
@@ -59,7 +192,7 @@ function initAdminMap() {
         color: "blue",
         fillColor: "blue",
         fillOpacity: 0.9
-    }).addTo(adminMap).bindTooltip( { permanent: true });
+    }).addTo(adminMap).bindTooltip("0" , { permanent: true });
 
     // Load camps
     loadCampsOnAdminMap();

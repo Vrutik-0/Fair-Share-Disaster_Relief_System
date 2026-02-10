@@ -5,15 +5,24 @@
     <link rel="stylesheet" href="/static/style.css">
     <style>
         body { display: flex; flex-direction: column; align-items: center; padding-top: 80px; }
+        .error-message { color: #d32f2f; font-size: 14px; margin-top: 5px; display: none; }
+        .form-group { margin-bottom: 15px; }
+        input { margin-bottom: 0; }
     </style>
 </head>
 <body>
 
 <h2>Login</h2>
 
-<form method="POST">
-    <input type="email" name="email" placeholder="Email" required>
-    <input type="password" name="password" placeholder="Password" required>
+<form id="loginForm" method="POST">
+    <div class="form-group">
+        <input type="email" id="loginEmail" name="email" placeholder="Email">
+        <div class="error-message" id="emailError"></div>
+    </div>
+    <div class="form-group">
+        <input type="password" id="loginPassword" name="password" placeholder="Password">
+        <div class="error-message" id="passwordError"></div>
+    </div>
     <button type="submit">Login</button>
 </form>
 
@@ -25,6 +34,16 @@
 {% if msg %}
 <script>alert("{{ msg }}");</script>
 {% endif %}
+
+<script src="/static/script.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('loginForm');
+        if (form) {
+            form.addEventListener('submit', validateLoginForm);
+        }
+    });
+</script>
 
 </body>
 </html>
