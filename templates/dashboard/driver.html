@@ -3,265 +3,381 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { corePlugins: { preflight: false } }</script>
+    <link rel="stylesheet" href="/static/style.css">
+
+    <link rel="stylesheet" type="text/css" href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css">
     <script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
     <script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/services/services-web.min.js"></script>
-    <title>Driver Dashboard</title>
-    <style>
-        .status-badge { 
-            padding: 4px 8px; 
-            border-radius: 4px; 
-            font-size: 12px; 
-            font-weight: bold;
-        }
-        .status-in_transit { background-color: #fff3cd; color: #856404; }
-        .status-available { background-color: #d4edda; color: #155724; }
-        .status-loading { background-color: #cce5ff; color: #004085; }
-        .camp-card {
-            border: 3px solid #CBD5E1;
-            border-radius: 10px;
-            padding: 15px;
-            margin: 10px 0;
-            background:#F1F5F9;
-        }
-        .camp-card.delivered { background: #d4edda; opacity: 0.5; }
-        .camp-header { display: flex; justify-content: space-between; align-items: center; }
-        .stop-number {
-            font-weight: bold;
-            font-size: 16px;
-        }
-        .urgency-high { border-left: 4px solid red;}
-        .urgency-medium { border-left: 4px solid orange; }
-        .urgency-low { border-left: 4px solid green; }
-        .items-table { width: 100%; margin-top: 10px; }
-        .items-table th, .items-table td { padding: 5px; text-align: left; }
-        .btn-deliver { background-color: #28a745; color: white; }
-        .btn-deliver:disabled { background-color: #ccc; cursor: not-allowed; }
-        #map { height: 400px; width: 100%; max-width: 600px; border: 2px solid #333; }
-        .flash-success { background-color: #d4edda; color: #155724; padding: 10px; margin: 10px 0; border-radius: 4px; }
-        .flash-warning { background-color: #fff3cd; color: #856404; padding: 10px; margin: 10px 0; border-radius: 4px; }
-    </style>
+    <title>Driver Dashboard — Fair-Share</title>
 </head>
+
 <body>
-    <!-- Left Sidebar -->
+
+    <!-- Sidebar -->
     <div class="sidebar">
         <div class="sidebar-header">Fair-Share V1</div>
+        <div class="sidebar-section-title">Navigation</div>
         <a href="{{ url_for('driver_dashboard') }}" class="sidebar-link active">Dashboard</a>
         <div class="sidebar-bottom">
-            <a href="{{ url_for('logout') }}" class="sidebar-link">Logout</a>
+            <a href="/logout" class="sidebar-link">Logout</a>
         </div>
     </div>
 
-    <!-- Toast -->
     <div id="notif-toasts" class="notif-toast-container"></div>
 
     <div class="page-content">
         <h2>Driver Dashboard</h2>
-        <p>Welcome, <strong>{{ session['name'] }}</strong></p>
-
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="flash-{{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
 
         {% if truck_number %}
-            <div style="margin: 15px 0;">
-                <strong>Assigned Truck:</strong> {{ truck_number }}
-                <span class="status-badge status-{{ truck_status }}">{{ truck_status or 'N/A' }}</span>
+        <div class="status-row" style="margin-bottom: 24px;">
+            <div class="stat-card">
+                <div class="stat-label">Truck Number</div>
+                <div class="stat-value">{{ truck_number }}</div>
             </div>
+            <div class="stat-card">
+                <div class="stat-label">Status</div>
+                <div class="stat-value">
+                    <span class="urgency-badge {% if truck_status == 'en_route' %}urgency-high{% elif truck_status == 'loaded' %}urgency-medium{% else %}urgency-low{% endif %}">
+                        {{ truck_status or 'idle' }}
+                    </span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Assigned Camps</div>
+                <div class="stat-value">{{ camps|length }}</div>
+            </div>
+        </div>
         {% else %}
-            <p style="color: orange;">No truck assigned to you yet.</p>
+        <div class="card" style="text-align: center; padding: 48px;">
+            <h3 style="margin-bottom: 10px;">No Truck Assigned</h3>
+            <p style="color: var(--text-muted);">You have not been assigned a truck yet. Please contact the admin.</p>
+        </div>
         {% endif %}
 
-        <h3>Route Map</h3>
-
-            
-        <div class="legend" style=" border: #4f4f4f solid 2px; border-radius: 8px;">
-            <span class="legend-item"><span class="legend-color" style="background:blue;"></span> NGO/Warehouse</span>
-            <span class="legend-item"><span class="legend-color" style="background:red;"></span> Critical (&ge;0.7)</span>
-            <span class="legend-item"><span class="legend-color" style="background:orange;"></span> Moderate (0.4-0.7)</span>
-            <span class="legend-item"><span class="legend-color" style="background:green;"></span> Low (&lt;0.4)</span>
-        </div>
-
-
+        {% if camps|length > 0 %}
+        <!-- Route Map -->
         <div class="map-notif-row">
-            <div id="map"></div>
-            <div class="notif-inline-box">
-                <div class="notif-inline-header">
-                    <span>Notifications</span>
-                    <span id="notif-unread-dot" class="notif-unread-dot hidden"></span>
-                    <button id="notif-mark-read-inline" class="mark-read-link">Mark all read</button>
+            <div class="card" style="flex: 2; min-width: 300px;">
+                <h4>Delivery Route</h4>
+                <div id="map" style="height: 420px; width: 100%; border-radius: 8px; margin-top: 12px;"></div>
+                <div class="legend" style="margin-top: 12px;">
+                    <span class="legend-item"><span class="legend-dot" style="background:#3b82f6;"></span> NGO Depot</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#e63946;"></span> High Urgency</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#f59e0b;"></span> Medium</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#10b981;"></span> Low</span>
                 </div>
-                <div id="notif-inline-list" class="notif-inline-list">
-                    <div class="notif-empty">Loading...</div>
+            </div>
+            <div class="card" style="flex:1; min-width: 260px; max-height: 500px; overflow-y: auto;">
+                <h4>Notifications</h4>
+                <div id="notif-inline-box">
+                    <p style="color: var(--text-muted); font-size: 0.9rem;">Loading notifications...</p>
                 </div>
             </div>
         </div>
 
-        <h3>Delivery Route</h3>
-
-        {% if camps %}
+        <!-- Camp Cards -->
+        <h3 style="margin-top: 32px;">Assigned Camps</h3>
+        <div class="camp-card-grid">
             {% for camp in camps %}
-            <div class="camp-card {% if camp.is_delivered %}delivered{% endif %} 
-                        {% if camp.urgency >= 0.7 %}urgency-high{% elif camp.urgency >= 0.4 %}urgency-medium{% else %}urgency-low{% endif %}">
-                
-                <div class="camp-header">
-                    <div>
-                        <span class="stop-number">{{ camp.visit_order or loop.index }}</span>
-                        <strong style="font-size: 18px; margin-left: 10px;">{{ camp.name }}</strong>
-                        <span style="color: gray; font-size: 12px;">(Urgency: {{ "%.2f"|format(camp.urgency) }})</span>
-                    </div>
-                    
-                    {% if not camp.is_delivered and camp.delivery_items %}
-                    <form method="POST" action="{{ url_for('mark_camp_delivered', camp_id=camp.camp_id) }}">
-                        <button type="submit" class="btn btn-deliver">Mark Delivered</button>
-                    </form>
-                    {% elif camp.is_delivered %}
-                        <span style="color: green; font-weight: bold;">Delivered</span>
-                    {% endif %}
+            <div class="camp-card {% if camp.is_delivered %}camp-delivered{% endif %}">
+                <div class="camp-card-header">
+                    <span class="camp-card-name">
+                        <span class="camp-stop-number">#{{ camp.visit_order }}</span>
+                        {{ camp.name }}
+                    </span>
+                    <span class="urgency-badge {% if camp.urgency >= 0.7 %}urgency-high{% elif camp.urgency >= 0.4 %}urgency-medium{% else %}urgency-low{% endif %}">
+                        {{ "%.2f"|format(camp.urgency or 0) }}
+                    </span>
                 </div>
 
-                {% if camp.delivery_items %}
-                <table class="items-table" border="2" cellpadding="5" cellspacing="0" style="border: rgb(103, 103, 103) solid 3px;">
-                    <tr >
-                        <th>Item</th>
-                        <th>Quantity</th>
-                    </tr>
-                    {% for item in camp.delivery_items %}
-                    <tr>
-                        <td>{{ item.type }}</td>
-                        <td>{{ item.quantity }}</td>
-                    </tr>
-                    {% endfor %}
-                </table>
+                {% if camp.is_delivered %}
+                <div class="camp-delivered-badge">All Items Delivered</div>
                 {% else %}
-                    <p style="color: gray; font-style: italic;">No pending deliveries for this camp.</p>
+                <table class="simple-table" style="margin: 10px 0;">
+                    <thead>
+                        <tr><th>Item</th><th>Qty</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for item in camp.delivery_items %}
+                        <tr>
+                            <td>{{ item.type }}</td>
+                            <td>{{ item.quantity }}</td>
+                            <td>
+                                <span class="urgency-badge {% if item.status == 'pending' %}urgency-high{% else %}urgency-low{% endif %}">
+                                    {{ item.status }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <button type="button" class="nday-predict-btn mark-delivered-btn" data-camp-id="{{ camp.camp_id }}" style="width:100%; font-size: 0.85rem; padding: 8px;">
+                    Mark Delivered
+                </button>
                 {% endif %}
             </div>
             {% endfor %}
-        {% else %}
-            <p>No deliveries assigned to your route.</p>
+        </div>
+
+        {% if deliveries|length > 0 %}
+        <div class="mark-all-btn-wrap" style="margin-top: 32px; text-align: center;">
+            <button type="button" id="mark-all-btn" class="nday-predict-btn" style="background: #10b981; font-size: 1rem; padding: 12px 32px;">
+                Mark All Delivered
+            </button>
+        </div>
+        {% endif %}
         {% endif %}
     </div>
 
     <script>
-        const TOMTOM_KEY = '1KePC88rQpaiVRKSJSwCzJmiQE18I29O';
-
+        // Grid-to-LngLat conversion (matches script.js)
         function gridToLngLat(gridY, gridX) {
-            const lat = 22.945 + (gridY * 0.15 / 1000);
-            const lng = 72.495 + (gridX * 0.15 / 1000);
+            var lat = 22.945 + (gridY * 0.15 / 1000);
+            var lng = 72.495 + (gridX * 0.15 / 1000);
             return [lng, lat];
         }
 
-        function createCircleEl(color, size) {
-            const el = document.createElement('div');
-            el.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid ${color};opacity:0.9;cursor:pointer;`;
-            return el;
+        var tomKey = "{{ tomtom_key|e }}";
+        var driverMap = null;
+        var routeLayerId = 'driver-route';
+
+        function initDriverMap() {
+            var center = gridToLngLat(500, 500);
+            driverMap = tt.map({
+                key: tomKey,
+                container: 'map',
+                center: center,
+                zoom: 10
+            });
+
+            driverMap.addControl(new tt.NavigationControl());
+
+            driverMap.on('load', function() {
+                driverMap.fitBounds(
+                    [gridToLngLat(0, 0), gridToLngLat(1000, 1000)],
+                    { padding: 40 }
+                );
+                loadDriverRoute();
+            });
         }
 
-        const map = tt.map({
-            key: TOMTOM_KEY,
-            container: 'map',
-            center: gridToLngLat(500, 500),
-            zoom: 10
-        });
+        function loadDriverRoute() {
+            fetch('/api/driver-route')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data.camps || data.camps.length === 0) return;
 
-        map.addControl(new tt.NavigationControl());
+                    var bounds = new tt.LngLatBounds();
 
-        map.on('load', () => {
-            fetch("/api/driver-route")
-                .then(res => res.json())
-                .then(async data => {
-                    if (!data.points || data.points.length === 0) {
-                        console.log("No route data");
-                        return;
+                    // Depot marker
+                    if (data.depot) {
+                        var depotPos = gridToLngLat(data.depot.y, data.depot.x);
+                        var depotEl = document.createElement('div');
+                        depotEl.style.cssText = 'width:20px;height:20px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 0 8px #3b82f680;';
+                        new tt.Marker({ element: depotEl })
+                            .setLngLat(depotPos)
+                            .setPopup(new tt.Popup({ offset: 20 }).setHTML(
+                                '<div style="padding:8px;color:#0f172a;"><strong>NGO Depot</strong><br>Base location</div>'
+                            ))
+                            .addTo(driverMap);
+                        bounds.extend(depotPos);
                     }
 
-                    // Convert points from [gridY, gridX] to [lng, lat]
-                    const lngLatPoints = data.points.map(p => gridToLngLat(p[0], p[1]));
-
-                    // Get real road route from TomTom Routing API
-                    let roadCoords = lngLatPoints;
-                    try {
-                        const locations = lngLatPoints.map(p => `${p[1]},${p[0]}`).join(':');
-                        const url = `https://api.tomtom.com/routing/1/calculateRoute/${locations}/json?key=${TOMTOM_KEY}&travelMode=truck&routeType=fastest`;
-                        const routeRes = await fetch(url);
-                        const routeData = await routeRes.json();
-                        if (routeData.routes && routeData.routes.length > 0) {
-                            roadCoords = routeData.routes[0].legs.flatMap(leg =>
-                                leg.points.map(p => [p.longitude, p.latitude])
-                            );
-                        }
-                    } catch (err) {
-                        console.warn("TomTom routing failed, falling back to straight line:", err);
+                    // Build waypoints: depot → camps
+                    var waypoints = [];
+                    if (data.depot) {
+                        waypoints.push(gridToLngLat(data.depot.y, data.depot.x));
                     }
 
-                    // Draw road-following route line
-                    map.addSource('driver-route', {
-                        type: 'geojson',
-                        data: {
-                            type: 'Feature',
-                            geometry: { type: 'LineString', coordinates: roadCoords }
-                        }
-                    });
+                    data.camps.forEach(function(c) {
+                        var color = c.urgency >= 0.7 ? '#e63946' : c.urgency >= 0.4 ? '#f59e0b' : '#10b981';
+                        var pos = gridToLngLat(c.y, c.x);
+                        waypoints.push(pos);
 
-                    map.addLayer({
-                        id: 'driver-route',
-                        type: 'line',
-                        source: 'driver-route',
-                        paint: {
-                            'line-color': 'blue',
-                            'line-width': 4,
-                            'line-opacity': 0.8
-                        }
-                    });
-
-                    // Add markers for each point
-                    lngLatPoints.forEach((p, i) => {
-                        const isDepot = i === 0;
-                        const color = isDepot ? 'blue' : 'red';
-                        const size = isDepot ? 20 : 16;
-                        const el = createCircleEl(color, size);
-                        const label = isDepot ? 'NGO / Warehouse' : `Stop ${i}: ${data.camps[i-1]?.name || 'Camp'}`;
+                        var el = document.createElement('div');
+                        el.style.cssText = 'width:28px;height:28px;border-radius:50%;background:' + color +
+                            ';border:2px solid #fff;box-shadow:0 0 6px ' + color +
+                            '80;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;';
+                        el.textContent = c.stop_number;
 
                         new tt.Marker({ element: el })
-                            .setLngLat(p)
-                            .setPopup(new tt.Popup({ offset: 10 }).setText(label))
-                            .addTo(map);
+                            .setLngLat(pos)
+                            .setPopup(new tt.Popup({ offset: 20 }).setHTML(
+                                '<div style="padding:8px;color:#0f172a;">' +
+                                '<strong>Stop #' + c.stop_number + ': ' + c.name + '</strong><br>' +
+                                'Urgency: <span style="color:' + color + ';font-weight:700;">' +
+                                (c.urgency || 0).toFixed(2) + '</span></div>'
+                            ))
+                            .addTo(driverMap);
+                        bounds.extend(pos);
                     });
 
-                    // Step number labels at midpoints
-                    if (lngLatPoints.length >= 2) {
-                        for (let i = 0; i < lngLatPoints.length - 1; i++) {
-                            const from = lngLatPoints[i];
-                            const to = lngLatPoints[i + 1];
-                            const midLng = (from[0] + to[0]) / 2;
-                            const midLat = (from[1] + to[1]) / 2;
+                    // Draw route via TomTom Routing API (real road path)
+                    if (waypoints.length >= 2) {
+                        var locations = waypoints.map(function(wp) {
+                            return wp[1] + ',' + wp[0];
+                        }).join(':');
 
-                            const numEl = document.createElement('div');
-                            numEl.style.cssText = 'background:green;color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;';
-                            numEl.textContent = i + 1;
+                        var routeUrl = 'https://api.tomtom.com/routing/1/calculateRoute/' +
+                            locations + '/json?key=' + tomKey + '&travelMode=truck&routeType=fastest';
 
-                            new tt.Marker({ element: numEl })
-                                .setLngLat([midLng, midLat])
-                                .addTo(map);
-                        }
+                        fetch(routeUrl)
+                            .then(function(r) { return r.json(); })
+                            .then(function(routeData) {
+                                if (routeData.routes && routeData.routes.length > 0) {
+                                    var coords = routeData.routes[0].legs.flatMap(function(leg) {
+                                        return leg.points.map(function(p) { return [p.longitude, p.latitude]; });
+                                    });
+                                    addRouteLayer(coords, false);
+                                } else {
+                                    addRouteLayer(waypoints, true);
+                                }
+                            })
+                            .catch(function() {
+                                addRouteLayer(waypoints, true);
+                            });
                     }
 
-                    // Fit bounds to show all points
-                    if (lngLatPoints.length > 0) {
-                        const bounds = new tt.LngLatBounds();
-                        lngLatPoints.forEach(p => bounds.extend(p));
-                        map.fitBounds(bounds, { padding: 50 });
+                    driverMap.fitBounds(bounds, { padding: 50, maxZoom: 13 });
+                });
+        }
+
+        function addRouteLayer(coordinates, isDashed) {
+            if (!driverMap) return;
+            // Remove existing route layer
+            try {
+                if (driverMap.getLayer(routeLayerId)) driverMap.removeLayer(routeLayerId);
+                if (driverMap.getSource(routeLayerId)) driverMap.removeSource(routeLayerId);
+            } catch(e) {}
+
+            var paint = {
+                'line-color': '#3b82f6',
+                'line-width': 4,
+                'line-opacity': 0.85
+            };
+            if (isDashed) {
+                paint['line-dasharray'] = [4, 4];
+                paint['line-width'] = 3;
+            }
+
+            driverMap.addSource(routeLayerId, {
+                type: 'geojson',
+                data: {
+                    type: 'Feature',
+                    geometry: { type: 'LineString', coordinates: coordinates }
+                }
+            });
+            driverMap.addLayer({
+                id: routeLayerId,
+                type: 'line',
+                source: routeLayerId,
+                paint: paint
+            });
+        }
+
+        // --- AJAX delivery: card disappears on mark-delivered ---
+        function markCampDelivered(campId, btn) {
+            btn.disabled = true;
+            btn.textContent = 'Delivering...';
+
+            fetch('/driver/mark-camp-delivered/' + campId, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json' }
+            })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('Failed');
+                    // Find and animate away the card
+                    var card = btn.closest('.camp-card');
+                    if (card) {
+                        card.style.transition = 'opacity 0.4s, transform 0.4s';
+                        card.style.opacity = '0';
+                        card.style.transform = 'scale(0.95)';
+                        setTimeout(function() {
+                            card.remove();
+                            checkAllDelivered();
+                        }, 400);
                     }
                 })
-                .catch(err => console.error("Error loading route:", err));
+                .catch(function() {
+                    btn.disabled = false;
+                    btn.textContent = 'Mark Delivered';
+                    alert('Failed to mark delivery. Please try again.');
+                });
+        }
+
+        function markAllDelivered(btn) {
+            btn.disabled = true;
+            btn.textContent = 'Processing...';
+
+            fetch('/driver/delivered', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json' }
+            })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('Failed');
+                    // Remove all camp cards
+                    document.querySelectorAll('.camp-card').forEach(function(card) {
+                        card.style.transition = 'opacity 0.4s, transform 0.4s';
+                        card.style.opacity = '0';
+                        card.style.transform = 'scale(0.95)';
+                        setTimeout(function() { card.remove(); }, 400);
+                    });
+                    setTimeout(function() { checkAllDelivered(); }, 500);
+                })
+                .catch(function() {
+                    btn.disabled = false;
+                    btn.textContent = 'Mark All Delivered';
+                    alert('Failed. Please try again.');
+                });
+        }
+
+        function checkAllDelivered() {
+            var remaining = document.querySelectorAll('.camp-card');
+            if (remaining.length === 0) {
+                // All delivered — clear the route from map
+                if (driverMap) {
+                    try {
+                        if (driverMap.getLayer(routeLayerId)) driverMap.removeLayer(routeLayerId);
+                        if (driverMap.getSource(routeLayerId)) driverMap.removeSource(routeLayerId);
+                    } catch(e) {}
+                }
+                // Replace camp grid with success message
+                var grid = document.querySelector('.camp-card-grid');
+                if (grid) {
+                    grid.innerHTML = '<div class="card" style="text-align:center;padding:48px;grid-column:1/-1;">' +
+                        '<h3 style="color:#10b981;margin-bottom:10px;">&#10003; All Deliveries Complete</h3>' +
+                        '<p style="color:var(--text-muted);">All assigned camps have been delivered to successfully.</p></div>';
+                }
+                // Hide "Mark All" button
+                var allBtn = document.querySelector('.mark-all-btn-wrap');
+                if (allBtn) allBtn.remove();
+            }
+        }
+        // Attach delegated event listeners to avoid inline JS (prevents editor lint errors)
+        document.addEventListener('DOMContentLoaded', function() {
+            // Mark individual camp delivered buttons
+            document.querySelectorAll('.mark-delivered-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var id = parseInt(btn.dataset.campId, 10);
+                    markCampDelivered(id, btn);
+                });
+            });
+
+            // Mark all button
+            var allBtn = document.getElementById('mark-all-btn');
+            if (allBtn) allBtn.addEventListener('click', function() { markAllDelivered(allBtn); });
+
+            if (document.getElementById('map')) {
+                initDriverMap();
+            }
         });
     </script>
+
     <script src="/static/script.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

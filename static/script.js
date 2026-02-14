@@ -152,8 +152,8 @@ if (totalPop && injuredPop) {
     injuredPop.addEventListener("input", updateUrgency);
 }
 
-// Tomtom
-const TOMTOM_KEY = '1KePC88rQpaiVRKSJSwCzJmiQE18I29O';
+// Tomtom API key — injected from server via window.TOMTOM_KEY
+const TOMTOM_KEY = window.TOMTOM_KEY || 'undefined-key-check-env';
 
 // Map grid (0-1000) to Ahmedabad
 function gridToLngLat(gridY, gridX) {
@@ -438,7 +438,7 @@ let _notifKnownIds = new Set();
 
 async function notifInit() {
     const notifBtn = document.getElementById('notif-btn');
-    const inlineList = document.getElementById('notif-inline-list');
+    const inlineList = document.getElementById('notif-inline-list') || document.getElementById('notif-inline-box');
 
     if (!notifBtn && !inlineList) return;
 
@@ -525,12 +525,14 @@ async function notifLoadHistory() {
     try {
         const res = await fetch('/api/notifications');
         const data = await res.json();
-        // Inline list takes priority
-        const list = document.getElementById('notif-inline-list') || document.getElementById('notif-list');
+        // Inline list takes priority (support both old and new IDs)
+        const list = document.getElementById('notif-inline-list') 
+                  || document.getElementById('notif-inline-box') 
+                  || document.getElementById('notif-list');
         if (!list) return;
 
         if (data.length === 0) {
-            list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
+            list.innerHTML = '<div class="notif-empty" style="color:var(--text-muted);padding:12px;font-size:0.9rem;">No notifications yet</div>';
             return;
         }
 
@@ -561,11 +563,23 @@ async function notifShowNewToasts() {
         // Mark them as known so we don't alert again
         newNotifs.forEach(n => _notifKnownIds.add(n.id));
 
-        // Simple alert popup
-        if (newNotifs.length === 1) {
-            alert("Notification: " + newNotifs[0].message);
-        } else {
-            alert("New Notifications:\n\n" + newNotifs.map(n => "• " + n.message).join("\n"));
+        // Show visual toasts instead of alerts
+        const container = document.getElementById('notif-toasts');
+        if (container) {
+            newNotifs.forEach(n => {
+                const toast = document.createElement('div');
+                toast.className = 'notif-toast animate-in';
+                toast.innerHTML = `
+                    <span class="notif-dot ${n.level || 'info'}" style="margin-right:10px;"></span>
+                    <span>${n.message}</span>
+                `;
+                container.appendChild(toast);
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    toast.style.transform = 'translateX(100%)';
+                    setTimeout(() => toast.remove(), 400);
+                }, 5000);
+            });
         }
 
         // Update history panel
@@ -576,8 +590,8 @@ async function notifShowNewToasts() {
 }
 
 // Initialize on page load — inline mode (dashboards) or panel mode (sub-pages)
-if (document.getElementById('notif-btn') || document.getElementById('notif-inline-list')) {
+if (document.getElementById('notif-btn') || document.getElementById('notif-inline-list') || document.getElementById('notif-inline-box')) {
     notifInit();
 }
 
-console.log("Fair-Share V1 successfull 🦆");
+console.log("Fair-Share V1 loaded successfully - 🦆");

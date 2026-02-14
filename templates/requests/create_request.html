@@ -3,15 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { corePlugins: { preflight: false } }</script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <title>Request Resources</title>
-    <style>
-        .other-name-field { display: none; margin-top: 10px; }
-    </style>
+    <title>Request Resources — Fair-Share</title>
 </head>
 <body>
-    
-    <!-- Left Sidebar -->
     <div class="sidebar">
         <div class="sidebar-header">Fair-Share V1</div>
         <div class="sidebar-section-title">Navigation</div>
@@ -28,50 +26,60 @@
         </div>
     </div>
 
+    <div id="notif-toasts" class="notif-toast-container"></div>
+
     <div class="page-content">
         <h2>Request Resources</h2>
 
-        <form method="POST">
-
-            <label>Camp</label>
-            <select name="camp_id" required>
-                {% for c in camps %}
-                <option value="{{ c[0] }}">
-                    {{ c[1] }} (Urgency: {{ c[2] }})
-                </option>
-                {% endfor %}
-            </select>
-
-            <label>Item Type</label>
-            <select name="item_type" id="item_type" required onchange="toggleOtherName()">
-                <option value="food">Food</option>
-                <option value="water">Water</option>
-                <option value="medicine-kit">Medicine Kit</option>
-                <option value="other">Other</option>
-            </select>
-
-            <div class="other-name-field" id="other-name-field">
-                <label>Item Name</label>
-                <input type="text" name="item_name" placeholder="Specify item name (optional)">
+        <form method="POST" class="modern-form">
+            <div class="form-group">
+                <label for="camp_id">Camp</label>
+                <select name="camp_id" id="camp_id" required>
+                    {% for c in camps %}
+                    <option value="{{ c[0] }}">
+                        {{ c[1] }} (Urgency: {{ c[2] }})
+                    </option>
+                    {% endfor %}
+                </select>
             </div>
 
-            <label>Quantity Needed</label>
-            <input type="number" name="quantity_needed" min="1" required>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="item_type">Item Type</label>
+                    <select name="item_type" id="item_type" required onchange="toggleOtherName()">
+                        <option value="food">Food</option>
+                        <option value="water">Water</option>
+                        <option value="medicine-kit">Medicine Kit</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group" id="other-name-field" style="display: none;">
+                    <label for="item_name">Item Name</label>
+                    <input type="text" name="item_name" id="item_name" placeholder="Specify item name">
+                </div>
+            </div>
 
-            <label>Override Priority</label>
-            <select name="priority">
-                <option value="">Auto (recommended)</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
-            </select>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="quantity_needed">Quantity Needed</label>
+                    <input type="number" name="quantity_needed" id="quantity_needed" min="1" placeholder="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="priority">Override Priority</label>
+                    <select name="priority" id="priority">
+                        <option value="">Auto (recommended)</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                </div>
+            </div>
 
-            <button type="submit">Submit Request</button>
+            <button type="submit" class="nday-predict-btn" style="width: 100%;">Submit Request</button>
         </form>
 
-        <br>
-        <a href="{{ url_for('campBoard') }}" class="btn">Back</a>
+        <a href="{{ url_for('campBoard') }}" class="btn" style="display: inline-block; margin-top: 16px; text-decoration: none;">Back to Dashboard</a>
     </div>
 
     <script>
@@ -81,5 +89,11 @@
             field.style.display = select.value === 'other' ? 'block' : 'none';
         }
     </script>
+    <script>
+        // Inject TomTom API key from server (do NOT hardcode)
+        window.TOMTOM_KEY = "{{ tomtom_key|e }}";
+    </script>
+    <script src="/static/script.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

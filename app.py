@@ -1,13 +1,22 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from db import get_db_connection
-import os
+import os, io, base64
 from collections import defaultdict
+from dotenv import load_dotenv
+
+# Load environment variables from .env
+load_dotenv()
 from Algo.clustering import cluster_camps
 from Algo.priority import rank_camps_greedy
 from Algo.knapsack import knapsack
 from Algo.routes import greedy_route
-from Algo.model import predict_next_day
+from Algo.model import predict_next_day, fetch_daily_demand
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 #NGO Base Coord
 DEPOT_X = 500
@@ -162,6 +171,14 @@ def check_low_stock(cur):
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
+
+# Get TomTom API key from environment
+TOMTOM_KEY = os.getenv("TOMTOM_KEY")
+
+# Inject TOMTOM_KEY into all templates
+@app.context_processor
+def inject_keys():
+    return dict(tomtom_key=TOMTOM_KEY)
 
 @app.route("/")
 def home():
@@ -1555,6 +1572,8 @@ def mark_delivered():
     cur.close()
     conn.close()
 
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.accept_mimetypes.best == 'application/json':
+        return jsonify({"ok": True})
     return redirect(url_for("driver_dashboard"))
 
 @app.route("/driver/mark-camp-delivered/<int:camp_id>", methods=["POST"])
@@ -1661,6 +1680,9 @@ def mark_camp_delivered(camp_id):
     cur.close()
     conn.close()
 
+    # Support AJAX (fetch) calls — return JSON instead of redirect
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.accept_mimetypes.best == 'application/json':
+        return jsonify({"ok": True, "remaining": remaining})
     return redirect(url_for("driver_dashboard"))
 
 
@@ -1680,11 +1702,20 @@ def reset_execution():
         WHERE id = 1
     """)
 
-    # Reset all trucks to available
+    # Reset allocations back to 'scheduled' so Steps 1-3 can reprocess them
+    cur.execute("""
+        UPDATE allocations
+        SET delivery_status = 'scheduled',
+            truck_id = NULL
+        WHERE delivery_status IN ('in_transit', 'loading')
+    """)
+
+    # Reset all trucks to available and clear driver assignments
     cur.execute("""
         UPDATE trucks
         SET status = 'available',
-            current_load_kg = 0
+            current_load_kg = 0,
+            driver_id = NULL
     """)
 
     # Clear truck assignments for next round
@@ -1779,6 +1810,275 @@ def nday_predict():
 
     result = predict_next_day()
     return jsonify(result)
+
+
+@app.route("/api/nday/chart")
+def nday_chart():
+    """Generate a Matplotlib chart of last N days demand and return as base64 PNG."""
+    if session.get("role") != "admin":
+        return jsonify({"ok": False}), 401
+
+    raw = fetch_daily_demand()
+    if raw.empty:
+        return jsonify({"ok": False, "message": "No data"})
+
+    import pandas as pd
+
+    item_colors = {
+        'food': '#c0392b',
+        'water': '#2980b9',
+        'medicine-kit': '#16a085',
+        'other': '#e67e22',
+    }
+
+    fig, axes = plt.subplots(2, 1, figsize=(10, 6), dpi=100, facecolor='#2a2d35')
+
+    # ---- Chart 1: Stacked area chart of daily demand by item type ----
+    ax1 = axes[0]
+    ax1.set_facecolor('#31343d')
+    all_dates = pd.date_range(raw["date"].min(), raw["date"].max(), freq="D")
+
+    pivot = raw.pivot_table(index="date", columns="item_type", values="total_needed", fill_value=0)
+    pivot = pivot.reindex(all_dates, fill_value=0)
+
+    for itype in pivot.columns:
+        color = item_colors.get(itype, '#888')
+        ax1.fill_between(pivot.index, pivot[itype], alpha=0.2, color=color)
+        ax1.plot(pivot.index, pivot[itype], linewidth=1.8, color=color, label=itype.replace('-', ' ').title())
+
+    ax1.set_title('Daily Resource Demand (Historical)', fontsize=13, fontweight='600', color='#e0e2e8', pad=10)
+    ax1.set_ylabel('Quantity', color='#a0a4b0', fontsize=10)
+    ax1.legend(loc='upper left', fontsize=8, framealpha=0.9, edgecolor='#363940', facecolor='#2a2d35', labelcolor='#a0a4b0')
+    ax1.tick_params(colors='#a0a4b0', labelsize=9)
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
+    ax1.xaxis.set_major_locator(mdates.AutoDateLocator())
+    ax1.grid(axis='y', alpha=0.15, color='#555')
+    for spine in ax1.spines.values():
+        spine.set_color('#363940')
+
+    # ---- Chart 2: Total daily demand bar chart ----
+    ax2 = axes[1]
+    ax2.set_facecolor('#31343d')
+    daily_total = pivot.sum(axis=1)
+    bar_colors = ['#c0392b' if v > daily_total.mean() * 1.3 else '#2980b9' for v in daily_total]
+    ax2.bar(daily_total.index, daily_total.values, color=bar_colors, width=0.8, alpha=0.8)
+    ax2.axhline(daily_total.mean(), color='#e67e22', linestyle='--', linewidth=1.5, alpha=0.7, label=f'Avg: {daily_total.mean():.0f}')
+    ax2.set_title('Total Daily Demand', fontsize=13, fontweight='600', color='#e0e2e8', pad=10)
+    ax2.set_ylabel('Total Quantity', color='#a0a4b0', fontsize=10)
+    ax2.legend(fontsize=8, framealpha=0.9, edgecolor='#363940', facecolor='#2a2d35', labelcolor='#a0a4b0')
+    ax2.tick_params(colors='#a0a4b0', labelsize=9)
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
+    ax2.xaxis.set_major_locator(mdates.AutoDateLocator())
+    ax2.grid(axis='y', alpha=0.15, color='#555')
+    for spine in ax2.spines.values():
+        spine.set_color('#363940')
+
+    plt.tight_layout(pad=2.0)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", facecolor='#2a2d35')
+    plt.close(fig)
+    buf.seek(0)
+    b64 = base64.b64encode(buf.read()).decode("utf-8")
+
+    return jsonify({"ok": True, "chart": b64})
+
+
+@app.route("/api/dashboard-charts")
+def dashboard_charts():
+    """Generate all admin dashboard charts as matplotlib PNGs."""
+    if session.get("role") != "admin":
+        return jsonify({"ok": False}), 401
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # Urgency distribution
+    cur.execute("""
+        SELECT
+            COUNT(*) FILTER (WHERE urgency_score >= 0.7) AS critical,
+            COUNT(*) FILTER (WHERE urgency_score >= 0.4 AND urgency_score < 0.7) AS moderate,
+            COUNT(*) FILTER (WHERE urgency_score < 0.4) AS low
+        FROM camps
+    """)
+    urg = cur.fetchone()
+
+    # Request status
+    cur.execute("SELECT status, COUNT(*) FROM requests GROUP BY status")
+    req_status = {r[0]: r[1] for r in cur.fetchall()}
+
+    # Warehouse stock
+    cur.execute("SELECT item_type, SUM(quantity) FROM warehouse_inventory GROUP BY item_type")
+    warehouse = {r[0]: int(r[1]) for r in cur.fetchall()}
+
+    # Daily request trend (last 14 days)
+    cur.execute("""
+        SELECT DATE(request_date), SUM(quantity_needed)
+        FROM requests
+        WHERE request_date >= CURRENT_DATE - INTERVAL '14 days'
+        GROUP BY DATE(request_date)
+        ORDER BY DATE(request_date)
+    """)
+    trend_rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    charts = {}
+
+    # --- 1. Urgency Doughnut ---
+    fig1, ax1 = plt.subplots(figsize=(4, 3.5), dpi=100, facecolor='#2a2d35')
+    vals = [urg[0], urg[1], urg[2]]
+    labels = ['Critical', 'Moderate', 'Low']
+    colors = ['#c0392b', '#e67e22', '#27ae60']
+    if sum(vals) > 0:
+        wedges, texts, autotexts = ax1.pie(vals, labels=labels, colors=colors, autopct='%1.0f%%',
+            startangle=90, pctdistance=0.75, wedgeprops=dict(width=0.4, edgecolor='#2a2d35', linewidth=2))
+        for t in texts:
+            t.set_fontsize(9)
+            t.set_color('#a0a4b0')
+        for t in autotexts:
+            t.set_fontsize(8)
+            t.set_color('#e0e2e8')
+    else:
+        ax1.text(0.5, 0.5, 'No data', ha='center', va='center', fontsize=12, color='#6b7080', transform=ax1.transAxes)
+    ax1.set_title('Camp Urgency Distribution', fontsize=11, fontweight='600', color='#e0e2e8', pad=8)
+    fig1.tight_layout()
+    buf1 = io.BytesIO()
+    fig1.savefig(buf1, format='png', bbox_inches='tight', facecolor='#2a2d35')
+    plt.close(fig1)
+    buf1.seek(0)
+    charts['urgency'] = base64.b64encode(buf1.read()).decode('utf-8')
+
+    # --- 2. Trend Line ---
+    fig2, ax2 = plt.subplots(figsize=(4.5, 3), dpi=100, facecolor='#2a2d35')
+    ax2.set_facecolor('#31343d')
+    if trend_rows:
+        t_labels = [r[0] for r in trend_rows]
+        t_data = [int(r[1]) for r in trend_rows]
+        ax2.fill_between(t_labels, t_data, alpha=0.15, color='#c0392b')
+        ax2.plot(t_labels, t_data, color='#c0392b', linewidth=2, marker='o', markersize=4)
+        ax2.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
+        plt.setp(ax2.xaxis.get_majorticklabels(), rotation=35, ha='right')
+    else:
+        ax2.text(0.5, 0.5, 'No data', ha='center', va='center', fontsize=12, color='#6b7080', transform=ax2.transAxes)
+    ax2.set_title('Request Trend (14 Days)', fontsize=11, fontweight='600', color='#e0e2e8', pad=8)
+    ax2.tick_params(colors='#a0a4b0', labelsize=8)
+    ax2.grid(axis='y', alpha=0.15, color='#555')
+    for spine in ax2.spines.values():
+        spine.set_color('#363940')
+    fig2.tight_layout()
+    buf2 = io.BytesIO()
+    fig2.savefig(buf2, format='png', bbox_inches='tight', facecolor='#2a2d35')
+    plt.close(fig2)
+    buf2.seek(0)
+    charts['trend'] = base64.b64encode(buf2.read()).decode('utf-8')
+
+    # --- 3. Warehouse Bar ---
+    fig3, ax3 = plt.subplots(figsize=(4.5, 3), dpi=100, facecolor='#2a2d35')
+    ax3.set_facecolor('#31343d')
+    if warehouse:
+        w_labels = [k.replace('-', ' ').title() for k in warehouse.keys()]
+        w_vals = list(warehouse.values())
+        bar_cols = ['#c0392b', '#2980b9', '#16a085', '#e67e22'][:len(w_labels)]
+        bars = ax3.bar(w_labels, w_vals, color=bar_cols, alpha=0.8, edgecolor='#2a2d35', linewidth=0.5)
+        for bar, val in zip(bars, w_vals):
+            ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(w_vals)*0.02,
+                     str(val), ha='center', va='bottom', fontsize=8, color='#a0a4b0', fontweight='600')
+    else:
+        ax3.text(0.5, 0.5, 'No data', ha='center', va='center', fontsize=12, color='#6b7080', transform=ax3.transAxes)
+    ax3.set_title('Warehouse Stock', fontsize=11, fontweight='600', color='#e0e2e8', pad=8)
+    ax3.tick_params(colors='#a0a4b0', labelsize=8)
+    ax3.grid(axis='y', alpha=0.15, color='#555')
+    for spine in ax3.spines.values():
+        spine.set_color('#363940')
+    fig3.tight_layout()
+    buf3 = io.BytesIO()
+    fig3.savefig(buf3, format='png', bbox_inches='tight', facecolor='#2a2d35')
+    plt.close(fig3)
+    buf3.seek(0)
+    charts['warehouse'] = base64.b64encode(buf3.read()).decode('utf-8')
+
+    # --- 4. Request Status Pie ---
+    fig4, ax4 = plt.subplots(figsize=(4, 3.5), dpi=100, facecolor='#2a2d35')
+    if req_status:
+        s_labels = [k.replace('_', ' ').title() for k in req_status.keys()]
+        s_vals = list(req_status.values())
+        status_colors = {'pending': '#e67e22', 'approved': '#27ae60', 'partially_approved': '#16a085',
+                         'discarded': '#c0392b', 'delivered': '#2980b9'}
+        s_cols = [status_colors.get(k, '#888') for k in req_status.keys()]
+        wedges, texts, autotexts = ax4.pie(s_vals, labels=s_labels, colors=s_cols, autopct='%1.0f%%',
+            startangle=90, pctdistance=0.75, wedgeprops=dict(width=0.4, edgecolor='#2a2d35', linewidth=2))
+        for t in texts:
+            t.set_fontsize(8)
+            t.set_color('#a0a4b0')
+        for t in autotexts:
+            t.set_fontsize(7)
+            t.set_color('#e0e2e8')
+    else:
+        ax4.text(0.5, 0.5, 'No data', ha='center', va='center', fontsize=12, color='#6b7080', transform=ax4.transAxes)
+    ax4.set_title('Request Status', fontsize=11, fontweight='600', color='#e0e2e8', pad=8)
+    fig4.tight_layout()
+    buf4 = io.BytesIO()
+    fig4.savefig(buf4, format='png', bbox_inches='tight', facecolor='#2a2d35')
+    plt.close(fig4)
+    buf4.seek(0)
+    charts['requests'] = base64.b64encode(buf4.read()).decode('utf-8')
+
+    return jsonify({"ok": True, "charts": charts})
+
+
+@app.route("/api/warehouse-chart")
+def warehouse_chart():
+    """Generate warehouse stock chart as matplotlib PNG."""
+    if "role" not in session:
+        return jsonify({"ok": False}), 401
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT item_type, SUM(quantity), SUM(low_stock_threshold)
+        FROM warehouse_inventory GROUP BY item_type
+    """)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    if not rows:
+        return jsonify({"ok": False, "message": "No data"})
+
+    items = [r[0].replace('-', ' ').title() for r in rows]
+    quantities = [int(r[1]) for r in rows]
+    thresholds = [int(r[2]) for r in rows]
+
+    fig, ax = plt.subplots(figsize=(6, 3.5), dpi=100, facecolor='#2a2d35')
+    ax.set_facecolor('#31343d')
+
+    x = range(len(items))
+    bar_colors = ['#c0392b' if q < t else '#27ae60' for q, t in zip(quantities, thresholds)]
+    bars = ax.bar(x, quantities, color=bar_colors, alpha=0.8, label='Current Stock', edgecolor='#2a2d35', linewidth=0.5)
+    ax.plot(x, thresholds, color='#e67e22', marker='D', markersize=5, linewidth=2, linestyle='--', label='Threshold', alpha=0.8)
+
+    for bar, val in zip(bars, quantities):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(quantities)*0.02,
+                str(val), ha='center', va='bottom', fontsize=8, color='#a0a4b0', fontweight='600')
+
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(items)
+    ax.set_title('Stock Levels vs Thresholds', fontsize=12, fontweight='600', color='#e0e2e8', pad=10)
+    ax.legend(fontsize=8, framealpha=0.9, edgecolor='#363940', facecolor='#2a2d35', labelcolor='#a0a4b0')
+    ax.tick_params(colors='#a0a4b0', labelsize=9)
+    ax.grid(axis='y', alpha=0.15, color='#555')
+    for spine in ax.spines.values():
+        spine.set_color('#363940')
+
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', bbox_inches='tight', facecolor='#2a2d35')
+    plt.close(fig)
+    buf.seek(0)
+    b64 = base64.b64encode(buf.read()).decode('utf-8')
+
+    return jsonify({"ok": True, "chart": b64})
 
 
 #Logout
