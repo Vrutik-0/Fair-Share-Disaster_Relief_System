@@ -8,6 +8,7 @@ A comprehensive disaster management system designed to optimize the allocation o
 - **Camp Prioritization:** Ranks relief camps based on population, injury severity, and current supply levels using a weighted scoring system.
 - **Route Optimization:** Calculates efficient delivery routes for trucks using a greedy algorithm that balances urgency and distance.
 - **Camp Clustering:** Groups relief camps into clusters using K-Means to assign them to specific delivery trucks.
+- **N-Day Demand Prediction:** XGBoost ML model predicts next-day resource needs per item type using historical request patterns, with trend indicators (increasing/decreasing/stable).
 - **Real-time Notifications:** Alerts users about request statuses and system updates.
 - **Interactive Map Visualization:** Displays camps, truck routes, and the NGO depot on a Leaflet-based map with urgency color coding.
 - **Fair Allocation Engine:** Uses weighted largest-remainder method to fairly distribute limited supplies across competing requests based on priority.
@@ -18,7 +19,7 @@ A comprehensive disaster management system designed to optimize the allocation o
 - **Database:** PostgreSQL
 - **Frontend:** HTML, CSS, JavaScript
 - **Mapping:** Leaflet.js (interactive grid-based map)
-- **Algorithms:** Scikit-learn (K-Means), implementations for Knapsack & Greedy Search
+- **ML / Algorithms:** XGBoost (demand forecasting), Scikit-learn (K-Means clustering), custom Knapsack & Greedy Search
 - **Database Driver:** Psycopg2
 - **Authentication:** Werkzeug (password hashing)
 
@@ -39,6 +40,13 @@ The admin has full control over the disaster relief pipeline. The dashboard disp
 2. **Step 2 — Prioritize:** Applies greedy prioritization to order camps by urgency within clusters
 3. **Step 3 — Load Trucks:** Uses knapsack optimization to load items within truck capacity
 4. **Step 4 — Execute:** Launches the delivery plan and locks the system until deliveries complete
+
+**N-Day Prediction Page (`/admin/nday`):**
+- Uses an XGBoost regression model trained on historical daily request data
+- Predicts next-day demand for each resource type (food, water, medicine-kit)
+- Displays prediction cards with quantity and trend indicators
+- Requires minimum 9 days of request history; shows an insufficient-data message otherwise
+- Features engineered: day-of-week, day-number, lag-1/2/3, rolling 3/5/7-day averages
 
 <img width="1840" height="919" alt="Screenshot 2026-02-09 233754" src="https://github.com/user-attachments/assets/b31ca8ec-5878-43ad-a8a5-373948b7c0b8" />
 
@@ -107,6 +115,9 @@ The system employs several algorithms to solve logistical challenges:
 5.  **Weighted Largest-Remainder Allocation (in `app.py`):**
     When warehouse stock is insufficient to fulfill all requests, the system fairly distributes available stock using priority-weighted proportional allocation with the largest-remainder method to avoid rounding losses.
 
+6.  **XGBoost Demand Forecasting (`Algo/model.py`):**
+    Trains an XGBoost regression model per resource type on daily aggregated request history. Engineered features include day-of-week, ordinal day number, lag-1/2/3 demand, and 3/5/7-day rolling averages. Predicts next-day demand and computes trend direction (increasing, decreasing, or stable) by comparing recent vs. prior 3-day averages.
+
 ## 🗄️ Database Schema
 
 The PostgreSQL database consists of 9 tables and 5 monitoring views:
@@ -158,8 +169,10 @@ The PostgreSQL database consists of 9 tables and 5 monitoring views:
     - Run the provided SQL scripts to set up the schema and seed initial data:
       ```bash
       psql -U your_username -d your_database -f data.sql
-      # Optional: load synthetic data
+      # Optional: load synthetic data (2-day demo)
       psql -U your_username -d your_database -f syndata.sql
+      # Optional: load 14-day ML training data (replaces syndata requests)
+      psql -U your_username -d your_database -f ml_data.sql
       ```
 
 4.  **Environment Configuration**
