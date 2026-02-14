@@ -37,10 +37,6 @@
     <script>alert("{{ msg }}");</script>
     {% endif %}
 
-    <script>
-        // Inject TomTom API key from server (do NOT hardcode)
-        window.TOMTOM_KEY = "{{ tomtom_key|e }}";
-    </script>
     <script src="/static/script.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {

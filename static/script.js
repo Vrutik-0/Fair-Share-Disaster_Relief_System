@@ -269,7 +269,7 @@ async function loadTruckRoutes() {
 
         const colors = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c"];
 
-        // Remove old route layers
+        // Remove old route
         routeLayerIds.forEach(id => {
             if (adminMap.getLayer(id)) adminMap.removeLayer(id);
             if (adminMap.getSource(id)) adminMap.removeSource(id);
@@ -331,7 +331,7 @@ async function loadTruckRoutes() {
 // Initialize admin map if element exists
 if (document.getElementById("admin-map")) {
     initAdminMap();
-    // Refresh camps every 5 seconds
+    // Refresh camps every 5 sec
     setInterval(loadCampsOnAdminMap, 5000);
 }
 
@@ -418,7 +418,7 @@ function initGeneralMap() {
     });
 }
 
-// Only init general map if not on driver page and admin-map doesn't exist
+// Initialize general map on pages that have #map but not #admin-map (to avoid double init on admin page)
 if (document.getElementById("map") && !document.getElementById("admin-map")) {
     const isDriverPage = window.location.pathname.includes('/driver');
     if (!isDriverPage) {
@@ -442,7 +442,7 @@ async function notifInit() {
 
     if (!notifBtn && !inlineList) return;
 
-    // Seed known IDs first so the initial poll doesn't alert old notifications
+    // Initial load of notifications and count
     await notifLoadHistory();
     await notifPollCount();
 
@@ -465,7 +465,7 @@ async function notifInit() {
         });
     }
 
-    // Mark all read — panel mode
+    // Mark all read — panel 
     document.getElementById('notif-mark-read')?.addEventListener('click', () => {
         fetch('/api/notifications/mark-read', { method: 'POST' })
             .then(() => {
@@ -474,7 +474,7 @@ async function notifInit() {
             });
     });
 
-    // Mark all read — inline mode (dashboards)
+    // Mark all read — dashboards
     document.getElementById('notif-mark-read-inline')?.addEventListener('click', (e) => {
         e.preventDefault();
         fetch('/api/notifications/mark-read', { method: 'POST' })
@@ -556,11 +556,11 @@ async function notifShowNewToasts() {
         const res = await fetch('/api/notifications');
         const data = await res.json();
 
-        // Find notifications we haven't alerted yet
+        // Filter to only new unread notification
         const newNotifs = data.filter(n => !n.is_read && !_notifKnownIds.has(n.id));
         if (newNotifs.length === 0) return;
 
-        // Mark them as known so we don't alert again
+        // Mark them as known to avoid duplicate toasts
         newNotifs.forEach(n => _notifKnownIds.add(n.id));
 
         // Show visual toasts instead of alerts
@@ -589,7 +589,7 @@ async function notifShowNewToasts() {
     }
 }
 
-// Initialize on page load — inline mode (dashboards) or panel mode (sub-pages)
+// Initialize on page load
 if (document.getElementById('notif-btn') || document.getElementById('notif-inline-list') || document.getElementById('notif-inline-box')) {
     notifInit();
 }

@@ -52,6 +52,7 @@
                     <span class="legend-item"><span class="legend-dot" style="background:#10b981;"></span> Low (&lt;0.4)</span>
                 </div>
             </div>
+            
             <div class="card" style="flex:1; min-width: 260px; max-height: 500px; overflow-y: auto;">
                 <h4>Recent Notifications</h4>
                 <div id="notif-inline-box">
@@ -67,7 +68,7 @@
     </div>
 
     <script>
-        // Initialize TomTom map - use injected key from server
+        // Initialize map
         var tomKey = "{{ tomtom_key|e }}";
         
         function initCampMap() {

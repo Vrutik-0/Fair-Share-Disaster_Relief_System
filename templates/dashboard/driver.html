@@ -134,7 +134,7 @@
     </div>
 
     <script>
-        // Grid-to-LngLat conversion (matches script.js)
+        // Grid conversion
         function gridToLngLat(gridY, gridX) {
             var lat = 22.945 + (gridY * 0.15 / 1000);
             var lng = 72.495 + (gridX * 0.15 / 1000);
@@ -187,7 +187,7 @@
                         bounds.extend(depotPos);
                     }
 
-                    // Build waypoints: depot → camps
+                    // Build waypoints: depot to camps
                     var waypoints = [];
                     if (data.depot) {
                         waypoints.push(gridToLngLat(data.depot.y, data.depot.x));
@@ -216,7 +216,7 @@
                         bounds.extend(pos);
                     });
 
-                    // Draw route via TomTom Routing API (real road path)
+                    // Draw route in TomTom Routing API 
                     if (waypoints.length >= 2) {
                         var locations = waypoints.map(function(wp) {
                             return wp[1] + ',' + wp[0];
@@ -279,7 +279,7 @@
             });
         }
 
-        // --- AJAX delivery: card disappears on mark-delivered ---
+        // --- card disappears ---
         function markCampDelivered(campId, btn) {
             btn.disabled = true;
             btn.textContent = 'Delivering...';
@@ -345,7 +345,7 @@
                         if (driverMap.getSource(routeLayerId)) driverMap.removeSource(routeLayerId);
                     } catch(e) {}
                 }
-                // Replace camp grid with success message
+                // Replace camp grid with success msg
                 var grid = document.querySelector('.camp-card-grid');
                 if (grid) {
                     grid.innerHTML = '<div class="card" style="text-align:center;padding:48px;grid-column:1/-1;">' +
@@ -357,7 +357,7 @@
                 if (allBtn) allBtn.remove();
             }
         }
-        // Attach delegated event listeners to avoid inline JS (prevents editor lint errors)
+        // End of card disappears
         document.addEventListener('DOMContentLoaded', function() {
             // Mark individual camp delivered buttons
             document.querySelectorAll('.mark-delivered-btn').forEach(function(btn) {

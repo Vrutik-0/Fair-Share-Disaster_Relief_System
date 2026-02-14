@@ -89,10 +89,7 @@
             field.style.display = select.value === 'other' ? 'block' : 'none';
         }
     </script>
-    <script>
-        // Inject TomTom API key from server (do NOT hardcode)
-        window.TOMTOM_KEY = "{{ tomtom_key|e }}";
-    </script>
+    
     <script src="/static/script.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
