@@ -11,7 +11,7 @@ from Algo.model import predict_next_day
 
 #NGO Base Coord
 DEPOT_X = 500
-DEPOT_Y = 0
+DEPOT_Y = 190
 
 def auto_approve_logic(request_id, cur):
 
@@ -386,8 +386,8 @@ def api_camps():
             "name": r[0],
             "x": r[1],   # x-coordinate
             "y": r[2],   # y-coordinate  
-            "lat": r[2], # For Leaflet: lat = y (vertical)
-            "lng": r[1], # For Leaflet: lng = x (horizontal)
+            "lat": r[2], # lat = y (vertical) - converted to real coords on frontend
+            "lng": r[1], # lng = x (horizontal) - converted to real coords on frontend
             "urgency": r[3]
         })
 
@@ -1262,7 +1262,7 @@ def get_truck_routes():
         edges = []
         
         # Build a line from depot through camps
-        route_points = [[DEPOT_Y, DEPOT_X]]  # Start with depot [y, x] for Leaflet
+        route_points = [[DEPOT_Y, DEPOT_X]]  # Start with depot [y, x] - converted on frontend
         
         for camp in camp_list:
             route_points.append([camp["y"], camp["x"]])
@@ -1509,13 +1509,13 @@ def driver_route():
     conn.close()
 
     # Build route from NGO depot
-    # [y, x] for Leaflet (lat, lng)
+    # [y, x] grid coords - converted to real lat/lng on frontend
     points = [[DEPOT_Y, DEPOT_X]]  # Base at (500, 0)
     
     camp_info = []
     for idx, camp in enumerate(camps):
         camp_id, name, cord_x, cord_y, urgency, visit_order = camp
-        points.append([cord_y, cord_x])  # [y, x] for Leaflet
+        points.append([cord_y, cord_x])  # [y, x] grid coords
         camp_info.append({
             "camp_id": camp_id,
             "name": name,

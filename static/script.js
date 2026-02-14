@@ -126,7 +126,6 @@ function validateSignupForm(e) {
     }
 }
 
-// ============ END VALIDATION ============
 
 const totalPop = document.querySelector('input[name="total_population"]');
 const injuredPop = document.querySelector('input[name="injured_population"]');
@@ -153,8 +152,22 @@ if (totalPop && injuredPop) {
     injuredPop.addEventListener("input", updateUrgency);
 }
 
+// Tomtom
+const TOMTOM_KEY = '1KePC88rQpaiVRKSJSwCzJmiQE18I29O';
+
+// Map grid (0-1000) to Ahmedabad
+function gridToLngLat(gridY, gridX) {
+    const lat = 22.945 + (gridY * 0.15 / 1000);
+    const lng = 72.495 + (gridX * 0.15 / 1000);
+    return [lng, lat];
+}
+
+const DEPOT_LNGLAT = gridToLngLat(190, 500);
+const GRID_BOUNDS = [gridToLngLat(0, 0), gridToLngLat(1000, 1000)];
+
 let adminMap = null;
 let campMarkers = [];
+let routeLayerIds = [];
 
 function getUrgencyColor(urgency) {
     if (urgency >= 0.7) return "red";
@@ -162,41 +175,38 @@ function getUrgencyColor(urgency) {
     return "green";
 }
 
+function createCircleEl(color, size) {
+    const el = document.createElement('div');
+    el.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid ${color};opacity:0.9;cursor:pointer;`;
+    return el;
+}
+
 function initAdminMap() {
     const mapElement = document.getElementById("admin-map");
     if (!mapElement || adminMap) return;
 
-    adminMap = L.map("admin-map", {
-        crs: L.CRS.Simple,
-        minZoom: -2
+    adminMap = tt.map({
+        key: TOMTOM_KEY,
+        container: 'admin-map',
+        center: gridToLngLat(500, 500),
+        zoom: 10
     });
 
-    const bounds = [[0, 0], [1000, 1000]];
-    adminMap.fitBounds(bounds);
+    adminMap.addControl(new tt.NavigationControl());
 
-    // Boundary box
-    L.rectangle(bounds, {
-        color: "#5f5f5f",
-        weight: 2,
-        fill: false
-    }).addTo(adminMap);
+    // Depot marker
+    const depotEl = createCircleEl('blue', 24);
+    const depotPopup = new tt.Popup({ offset: 15 }).setHTML('<b>NGO / Warehouse</b><br>Depot');
+    new tt.Marker({ element: depotEl })
+        .setLngLat(DEPOT_LNGLAT)
+        .setPopup(depotPopup)
+        .addTo(adminMap);
 
-    // Grid
-    drawGrid(adminMap, 100);
-
-    // NGO/Warehouse marker
-    L.circleMarker([0, 500], {
-        radius: 12,
-        color: "blue",
-        fillColor: "blue",
-        fillOpacity: 0.9
-    }).addTo(adminMap).bindTooltip("0" , { permanent: true });
-
-    // Load camps
-    loadCampsOnAdminMap();
-
-    // Load truck routes
-    loadTruckRoutes();
+    adminMap.on('load', () => {
+        adminMap.fitBounds(GRID_BOUNDS, { padding: 40 });
+        loadCampsOnAdminMap();
+        loadTruckRoutes();
+    });
 }
 
 async function loadCampsOnAdminMap() {
@@ -207,31 +217,47 @@ async function loadCampsOnAdminMap() {
         const data = await res.json();
 
         // Clear old markers
-        campMarkers.forEach(m => adminMap.removeLayer(m));
+        campMarkers.forEach(m => m.remove());
         campMarkers = [];
 
         data.camps.forEach(camp => {
-            const marker = L.circleMarker(
-                [camp.lat, camp.lng],
-                {
-                    radius: 8,
-                    color: getUrgencyColor(camp.urgency),
-                    fillColor: getUrgencyColor(camp.urgency),
-                    fillOpacity: 0.8
-                }
-            ).addTo(adminMap);
+            const color = getUrgencyColor(camp.urgency);
+            const el = createCircleEl(color, 16);
+            const pos = gridToLngLat(camp.lat, camp.lng);
+            const popup = new tt.Popup({ offset: 10 }).setHTML(
+                `<b>${camp.name}</b><br>Urgency: ${camp.urgency}<br>Position: (${camp.lat}, ${camp.lng})`
+            );
 
-            marker.bindTooltip(`
-                <b>${camp.name}</b><br>
-                Urgency: ${camp.urgency}<br>
-                Position: (${camp.lat}, ${camp.lng})
-            `);
+            const marker = new tt.Marker({ element: el })
+                .setLngLat(pos)
+                .setPopup(popup)
+                .addTo(adminMap);
 
             campMarkers.push(marker);
         });
     } catch (err) {
         console.error("Error loading camps:", err);
     }
+}
+
+// Fetch a real-road route between an array of [lng, lat] waypoints using TomTom Routing API
+async function fetchRoadRoute(waypoints) {
+    if (waypoints.length < 2) return waypoints;
+    try {
+        const locations = waypoints.map(p => `${p[1]},${p[0]}`).join(':');
+        const url = `https://api.tomtom.com/routing/1/calculateRoute/${locations}/json?key=${TOMTOM_KEY}&travelMode=truck&routeType=fastest`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.routes && data.routes.length > 0) {
+            const points = data.routes[0].legs.flatMap(leg =>
+                leg.points.map(p => [p.longitude, p.latitude])
+            );
+            return points;
+        }
+    } catch (err) {
+        console.warn("TomTom routing failed, falling back to straight line:", err);
+    }
+    return waypoints;
 }
 
 async function loadTruckRoutes() {
@@ -243,55 +269,62 @@ async function loadTruckRoutes() {
 
         const colors = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c"];
 
+        // Remove old route layers
+        routeLayerIds.forEach(id => {
+            if (adminMap.getLayer(id)) adminMap.removeLayer(id);
+            if (adminMap.getSource(id)) adminMap.removeSource(id);
+        });
+        routeLayerIds = [];
+
         console.log("Truck routes loaded:", data.routes.length, "routes");
 
-        data.routes.forEach((route, idx) => {
+        for (let idx = 0; idx < data.routes.length; idx++) {
+            const route = data.routes[idx];
             const color = colors[idx % colors.length];
-            
+            const layerId = 'route-' + idx;
+
             console.log(`Route ${idx}: Truck ${route.truck_id}, ${route.camps.length} camps, ${route.edges.length} edges`);
 
-            // Draw route line using route_points if available
+            // Convert route_points from [gridY, gridX] to [lng, lat]
+            let waypoints;
             if (route.route_points && route.route_points.length > 1) {
-                L.polyline(route.route_points, {
-                    color: color,
-                    weight: 4,
-                    opacity: 0.8
-                }).addTo(adminMap);
+                waypoints = route.route_points.map(p => gridToLngLat(p[0], p[1]));
             } else {
-                // Fallback to drawing edges
-                route.edges.forEach((edge) => {
-                    L.polyline(edge, {
-                        color: color,
-                        weight: 4,
-                        opacity: 0.8
-                    }).addTo(adminMap);
+                waypoints = [];
+                route.edges.forEach(edge => {
+                    if (waypoints.length === 0) waypoints.push(gridToLngLat(edge[0][0], edge[0][1]));
+                    waypoints.push(gridToLngLat(edge[1][0], edge[1][1]));
                 });
             }
-        });
+
+            if (waypoints.length > 1) {
+                // Get real road route from TomTom
+                const roadCoords = await fetchRoadRoute(waypoints);
+
+                adminMap.addSource(layerId, {
+                    type: 'geojson',
+                    data: {
+                        type: 'Feature',
+                        geometry: { type: 'LineString', coordinates: roadCoords }
+                    }
+                });
+
+                adminMap.addLayer({
+                    id: layerId,
+                    type: 'line',
+                    source: layerId,
+                    paint: {
+                        'line-color': color,
+                        'line-width': 4,
+                        'line-opacity': 0.8
+                    }
+                });
+
+                routeLayerIds.push(layerId);
+            }
+        }
     } catch (err) {
         console.error("Error loading truck routes:", err);
-    }
-}
-
-function drawGrid(map, step = 100) {
-    // Vertical lines
-    for (let x = 0; x <= 1000; x += step) {
-        L.polyline([[0, x], [1000, x]], {
-            color: "#b6b6b6",
-            weight: 1,
-            opacity: 0.4,
-            interactive: false
-        }).addTo(map);
-    }
-
-    // Horizontal lines
-    for (let y = 0; y <= 1000; y += step) {
-        L.polyline([[y, 0], [y, 1000]], {
-            color: "#b6b6b6",
-            weight: 1,
-            opacity: 0.4,
-            interactive: false
-        }).addTo(map);
     }
 }
 
@@ -306,72 +339,87 @@ function initGeneralMap() {
     const mapElement = document.getElementById("map");
     if (!mapElement) return;
 
-    // Check if this is the driver page (has different initialization)
     if (document.body.classList.contains('driver-page')) return;
 
-    const map = L.map("map", {
-        crs: L.CRS.Simple,
-        minZoom: -2
+    const map = tt.map({
+        key: TOMTOM_KEY,
+        container: 'map',
+        center: gridToLngLat(500, 500),
+        zoom: 10
     });
 
-    const bounds = [[0, 0], [1000, 1000]];
-    map.fitBounds(bounds);
+    map.addControl(new tt.NavigationControl());
 
-    L.rectangle(bounds, {
-        color: "#5f5f5f",
-        weight: 2,
-        fill: false
-    }).addTo(map);
+    // Depot marker
+    const depotEl = createCircleEl('blue', 24);
+    new tt.Marker({ element: depotEl })
+        .setLngLat(DEPOT_LNGLAT)
+        .setPopup(new tt.Popup({ offset: 15 }).setHTML('<b>NGO / Warehouse</b>'))
+        .addTo(map);
 
-    drawGrid(map, 100);
+    map.on('load', () => {
+        map.fitBounds(GRID_BOUNDS, { padding: 40 });
 
-    // NGO marker
-    L.circleMarker([0, 500], {
-        radius: 12,
-        color: "blue",
-        fillColor: "blue",
-        fillOpacity: 0.9
-    }).addTo(map).bindTooltip({ permanent: true });
+        // Load camps
+        fetch("/api/camps")
+            .then(res => res.json())
+            .then(data => {
+                data.camps.forEach(camp => {
+                    const color = getUrgencyColor(camp.urgency);
+                    const el = createCircleEl(color, 16);
+                    const pos = gridToLngLat(camp.lat, camp.lng);
 
-    // Load camps
-    fetch("/api/camps")
-        .then(res => res.json())
-        .then(data => {
-            data.camps.forEach(camp => {
-                L.circleMarker([camp.lat, camp.lng], {
-                    radius: 8,
-                    color: getUrgencyColor(camp.urgency),
-                    fillColor: getUrgencyColor(camp.urgency),
-                    fillOpacity: 0.8
-                }).addTo(map).bindTooltip(`
-                    <b>${camp.name}</b><br>
-                    Urgency: ${camp.urgency}
-                `);
-            });
-        });
-
-    // Load routes
-    fetch("/api/truck-routes")
-        .then(res => res.json())
-        .then(data => {
-            const colors = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6"];
-            
-            data.routes.forEach((route, idx) => {
-                const color = colors[idx % colors.length];
-                
-                route.edges.forEach(edge => {
-                    L.polyline(edge, {
-                        color: color,
-                        weight: 3
-                    }).addTo(map);
+                    new tt.Marker({ element: el })
+                        .setLngLat(pos)
+                        .setPopup(new tt.Popup({ offset: 10 }).setHTML(
+                            `<b>${camp.name}</b><br>Urgency: ${camp.urgency}`
+                        ))
+                        .addTo(map);
                 });
             });
-        });
+
+        // Load routes using real roads
+        fetch("/api/truck-routes")
+            .then(res => res.json())
+            .then(async data => {
+                const colors = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6"];
+
+                for (let idx = 0; idx < data.routes.length; idx++) {
+                    const route = data.routes[idx];
+                    const color = colors[idx % colors.length];
+                    const layerId = 'general-route-' + idx;
+
+                    let waypoints = [];
+                    route.edges.forEach(edge => {
+                        if (waypoints.length === 0) waypoints.push(gridToLngLat(edge[0][0], edge[0][1]));
+                        waypoints.push(gridToLngLat(edge[1][0], edge[1][1]));
+                    });
+
+                    if (waypoints.length > 1) {
+                        const roadCoords = await fetchRoadRoute(waypoints);
+
+                        map.addSource(layerId, {
+                            type: 'geojson',
+                            data: {
+                                type: 'Feature',
+                                geometry: { type: 'LineString', coordinates: roadCoords }
+                            }
+                        });
+
+                        map.addLayer({
+                            id: layerId,
+                            type: 'line',
+                            source: layerId,
+                            paint: { 'line-color': color, 'line-width': 3 }
+                        });
+                    }
+                }
+            });
+    });
 }
 
 // Only init general map if not on driver page and admin-map doesn't exist
 if (document.getElementById("map") && !document.getElementById("admin-map")) {
-    // Check if we're not on driver dashboard (driver has its own script)
     const isDriverPage = window.location.pathname.includes('/driver');
     if (!isDriverPage) {
         initGeneralMap();
@@ -442,7 +490,7 @@ async function notifPollCount() {
         const res = await fetch('/api/notifications/unread-count');
         const data = await res.json();
 
-        // Badge mode (sub-pages with sidebar button)
+        // Badge mode 
         const badge = document.getElementById('notif-badge');
         if (badge) {
             if (data.count > 0) {

@@ -10,7 +10,7 @@ A comprehensive disaster management system designed to optimize the allocation o
 - **Camp Clustering:** Groups relief camps into clusters using K-Means to assign them to specific delivery trucks.
 - **N-Day Demand Prediction:** XGBoost ML model predicts next-day resource needs per item type using historical request patterns, with trend indicators (increasing/decreasing/stable).
 - **Real-time Notifications:** Alerts users about request statuses and system updates.
-- **Interactive Map Visualization:** Displays camps, truck routes, and the NGO depot on a Leaflet-based map with urgency color coding.
+- **Interactive Map Visualization:** Displays camps, truck routes, and the NGO depot on a TomTom-based map with urgency color coding.
 - **Fair Allocation Engine:** Uses weighted largest-remainder method to fairly distribute limited supplies across competing requests based on priority.
 
 ## 🛠️ Tech Stack
@@ -18,7 +18,7 @@ A comprehensive disaster management system designed to optimize the allocation o
 - **Backend:** Python (Flask)
 - **Database:** PostgreSQL
 - **Frontend:** HTML, CSS, JavaScript
-- **Mapping:** Leaflet.js (interactive grid-based map)
+- **Mapping:** TomTom Maps SDK (interactive map)
 - **ML / Algorithms:** XGBoost (demand forecasting), Scikit-learn (K-Means clustering), custom Knapsack & Greedy Search
 - **Database Driver:** Psycopg2
 - **Authentication:** Werkzeug (password hashing)
@@ -89,7 +89,7 @@ Drivers see their assigned truck, delivery route, and camp-by-camp delivery chec
 |---------|-------|-------------|
 | **View Assigned Truck** | Dashboard | Displays assigned truck number and current status (available, loading, in_transit) |
 | **Camp Delivery List** | Dashboard | Shows all assigned camps in visit order with delivery items (type, quantity, status) |
-| **Interactive Route Map** | Dashboard map | Leaflet map showing the driver's specific route from the NGO depot through each camp |
+| **Interactive Route Map** | Dashboard map | TomTom map showing the driver's specific route from the NGO depot through each camp |
 | **Mark Camp Delivered** | `/driver/mark-camp-delivered/<camp_id>` | Mark deliveries for a single camp as complete — updates allocation and request statuses |
 | **Mark All Delivered** | `/driver/delivered` | Mark all assigned deliveries as delivered at once |
 

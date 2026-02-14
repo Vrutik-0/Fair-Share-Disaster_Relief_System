@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css">
+    <script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
+    <script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/services/services-web.min.js"></script>
     <title>Driver Dashboard</title>
     <style>
         .status-badge { 
@@ -148,84 +149,118 @@
     </div>
 
     <script>
-        // map
-        const map = L.map("map", {
-            crs: L.CRS.Simple,
-            minZoom: -1
+        const TOMTOM_KEY = '1KePC88rQpaiVRKSJSwCzJmiQE18I29O';
+
+        function gridToLngLat(gridY, gridX) {
+            const lat = 22.945 + (gridY * 0.15 / 1000);
+            const lng = 72.495 + (gridX * 0.15 / 1000);
+            return [lng, lat];
+        }
+
+        function createCircleEl(color, size) {
+            const el = document.createElement('div');
+            el.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid ${color};opacity:0.9;cursor:pointer;`;
+            return el;
+        }
+
+        const map = tt.map({
+            key: TOMTOM_KEY,
+            container: 'map',
+            center: gridToLngLat(500, 500),
+            zoom: 10
         });
 
-        const bounds = [[0, 0], [1000, 1000]];
-        map.fitBounds(bounds);
+        map.addControl(new tt.NavigationControl());
 
-        L.rectangle(bounds, {
-            color: "#333",
-            weight: 2,
-            fill: false
-        }).addTo(map);
-
-        function drawGrid(step = 100) {
-            for (let x = 0; x <= 1000; x += step) {
-                L.polyline([[0, x], [1000, x]], {
-                    color: "#ddd",
-                    weight: 1,
-                    opacity: 0.5
-                }).addTo(map);
-            }
-            for (let y = 0; y <= 1000; y += step) {
-                L.polyline([[y, 0], [y, 1000]], {
-                    color: "#ddd",
-                    weight: 1,
-                    opacity: 0.5
-                }).addTo(map);
-            }
-        }
-        drawGrid(100);
-
-        fetch("/api/driver-route")
-            .then(res => res.json())
-            .then(data => {
-                if (!data.points || data.points.length === 0) {
-                    console.log("No route data");
-                    return;
-                }
-
-                L.polyline(data.points, {
-                    color: "blue",
-                    weight: 4,
-                    opacity: 0.8
-                }).addTo(map);
-
-                data.points.forEach((p, i) => {
-                    const isDepot = i === 0;
-                    
-                    L.circleMarker(p, {
-                        radius: isDepot ? 10 : 8,
-                        color: isDepot ? "blue" : "red",
-                        fillColor: isDepot ? "blue" : "red",
-                        fillOpacity: 0.9
-                    }).addTo(map).bindTooltip(
-                        isDepot ? "NGO / Warehouse" : `Stop ${i}: ${data.camps[i-1]?.name || 'Camp'}`,
-                        { permanent: false }
-                    );
-                });
-
-                if (data.points.length >= 2) {
-                    for (let i = 0; i < data.points.length - 1; i++) {
-                        const from = data.points[i];
-                        const to = data.points[i + 1];
-                        const midY = (from[0] + to[0]) / 2;
-                        const midX = (from[1] + to[1]) / 2;
-                        
-                        L.circleMarker([midY, midX], {
-                            radius: 4,
-                            color: "green",
-                            fillColor: "green",
-                            fillOpacity: 1
-                        }).addTo(map).bindTooltip(`${i + 1}`, { permanent: true, direction: 'center', className: 'arrow-label' });
+        map.on('load', () => {
+            fetch("/api/driver-route")
+                .then(res => res.json())
+                .then(async data => {
+                    if (!data.points || data.points.length === 0) {
+                        console.log("No route data");
+                        return;
                     }
-                }
-            })
-            .catch(err => console.error("Error loading route:", err));
+
+                    // Convert points from [gridY, gridX] to [lng, lat]
+                    const lngLatPoints = data.points.map(p => gridToLngLat(p[0], p[1]));
+
+                    // Get real road route from TomTom Routing API
+                    let roadCoords = lngLatPoints;
+                    try {
+                        const locations = lngLatPoints.map(p => `${p[1]},${p[0]}`).join(':');
+                        const url = `https://api.tomtom.com/routing/1/calculateRoute/${locations}/json?key=${TOMTOM_KEY}&travelMode=truck&routeType=fastest`;
+                        const routeRes = await fetch(url);
+                        const routeData = await routeRes.json();
+                        if (routeData.routes && routeData.routes.length > 0) {
+                            roadCoords = routeData.routes[0].legs.flatMap(leg =>
+                                leg.points.map(p => [p.longitude, p.latitude])
+                            );
+                        }
+                    } catch (err) {
+                        console.warn("TomTom routing failed, falling back to straight line:", err);
+                    }
+
+                    // Draw road-following route line
+                    map.addSource('driver-route', {
+                        type: 'geojson',
+                        data: {
+                            type: 'Feature',
+                            geometry: { type: 'LineString', coordinates: roadCoords }
+                        }
+                    });
+
+                    map.addLayer({
+                        id: 'driver-route',
+                        type: 'line',
+                        source: 'driver-route',
+                        paint: {
+                            'line-color': 'blue',
+                            'line-width': 4,
+                            'line-opacity': 0.8
+                        }
+                    });
+
+                    // Add markers for each point
+                    lngLatPoints.forEach((p, i) => {
+                        const isDepot = i === 0;
+                        const color = isDepot ? 'blue' : 'red';
+                        const size = isDepot ? 20 : 16;
+                        const el = createCircleEl(color, size);
+                        const label = isDepot ? 'NGO / Warehouse' : `Stop ${i}: ${data.camps[i-1]?.name || 'Camp'}`;
+
+                        new tt.Marker({ element: el })
+                            .setLngLat(p)
+                            .setPopup(new tt.Popup({ offset: 10 }).setText(label))
+                            .addTo(map);
+                    });
+
+                    // Step number labels at midpoints
+                    if (lngLatPoints.length >= 2) {
+                        for (let i = 0; i < lngLatPoints.length - 1; i++) {
+                            const from = lngLatPoints[i];
+                            const to = lngLatPoints[i + 1];
+                            const midLng = (from[0] + to[0]) / 2;
+                            const midLat = (from[1] + to[1]) / 2;
+
+                            const numEl = document.createElement('div');
+                            numEl.style.cssText = 'background:green;color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;';
+                            numEl.textContent = i + 1;
+
+                            new tt.Marker({ element: numEl })
+                                .setLngLat([midLng, midLat])
+                                .addTo(map);
+                        }
+                    }
+
+                    // Fit bounds to show all points
+                    if (lngLatPoints.length > 0) {
+                        const bounds = new tt.LngLatBounds();
+                        lngLatPoints.forEach(p => bounds.extend(p));
+                        map.fitBounds(bounds, { padding: 50 });
+                    }
+                })
+                .catch(err => console.error("Error loading route:", err));
+        });
     </script>
     <script src="/static/script.js"></script>
 </body>
