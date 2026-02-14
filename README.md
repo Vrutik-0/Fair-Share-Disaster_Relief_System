@@ -47,8 +47,11 @@ The admin has full control over the disaster relief pipeline. The dashboard disp
 - Displays prediction cards with quantity and trend indicators
 - Requires minimum 9 days of request history; shows an insufficient-data message otherwise
 - Features engineered: day-of-week, day-number, lag-1/2/3, rolling 3/5/7-day averages
+  
+<img width="1908" height="922" alt="Screenshot 2026-02-14 214518" src="https://github.com/user-attachments/assets/73086868-f046-4a60-bf78-ee30e249c971" />
 
-<img width="1840" height="919" alt="Screenshot 2026-02-09 233754" src="https://github.com/user-attachments/assets/b31ca8ec-5878-43ad-a8a5-373948b7c0b8" />
+<img width="1919" height="916" alt="Screenshot 2026-02-14 214549" src="https://github.com/user-attachments/assets/7ec94706-d018-48c9-ad47-17ef8f0b523f" />
+
 
 ### 2. 🏕️ Camp Manager Dashboard (`/camp/dashboard`)
 
