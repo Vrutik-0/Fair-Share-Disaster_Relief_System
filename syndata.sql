@@ -1,3 +1,7 @@
+
+
+
+
 -- OPTIONAL: Clear existing data 
 
 -- TRUNCATE users, camps,warehouse_inventory, requests, allocations, trucks, truck_assignments ,notifications RESTART IDENTITY CASCADE;

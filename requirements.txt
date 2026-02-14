@@ -5,3 +5,6 @@ psycopg2-binary
 python-socketio
 scikit-learn
 matplotlib
+xgboost
+pandas
+numpy

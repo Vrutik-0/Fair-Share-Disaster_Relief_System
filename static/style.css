@@ -5,7 +5,7 @@ body {
     padding: 0;
 }
 
-/* =================================== Left Sidebar ============================== */
+/* -----------Left Sidebar------------------ */
 .sidebar {
     position: fixed;
     top: 0;
@@ -393,3 +393,102 @@ table.simple-table tr:nth-child(even) {
 table.simple-table tr:hover {
     background: #eef2ff;
 }
+
+/* ===== N-Day Prediction Page ===== */
+.nday-predict-btn {
+    padding: 12px 32px;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    width: auto;
+}
+.nday-predict-btn:hover { background: #1e40af; }
+.nday-predict-btn:disabled {
+    background: #93c5fd;
+    cursor: not-allowed;
+}
+
+.nday-loader {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 18px 0;
+    color: #555;
+    font-size: 15px;
+}
+.nday-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid #e0e0e0;
+    border-top: 3px solid #2563eb;
+    border-radius: 50%;
+    animation: nday-spin 0.7s linear infinite;
+}
+@keyframes nday-spin {
+    to { transform: rotate(360deg); }
+}
+
+.nday-error {
+    margin: 18px 0;
+    padding: 16px 20px;
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    border-radius: 8px;
+    color: #991b1b;
+    font-size: 15px;
+    max-width: 600px;
+}
+
+.nday-meta {
+    display: flex;
+    gap: 24px;
+    margin: 18px 0 12px;
+    font-size: 14px;
+    color: #666;
+}
+.nday-meta span {
+    background: #f1f5f9;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+}
+
+.nday-card-container {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin: 16px 0 24px;
+}
+.nday-card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 20px 28px;
+    min-width: 160px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border: 1px solid #e5e7eb;
+    text-align: center;
+}
+.nday-card-title {
+    font-size: 13px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+.nday-card-value {
+    font-size: 36px;
+    font-weight: 700;
+    color: #1e293b;
+}
+.nday-card-trend {
+    font-size: 13px;
+    margin-top: 6px;
+    font-weight: 600;
+}
+
+.hidden { display: none !important; }

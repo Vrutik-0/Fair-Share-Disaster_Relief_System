@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/style.css">
+    <title>N-Day Prediction</title>
+    <style>
+        .flash-success { background-color: #d4edda; color: #155724; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .flash-warning { background-color: #fff3cd; color: #856404; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .flash-error   { background-color: #f8d7da; color: #721c24; padding: 10px; margin: 10px 0; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <!-- Left Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">Fair-Share V1</div>
+        <a href="{{ url_for('adminBoard') }}" class="sidebar-link">Dashboard</a>
+        <a href="/camps" class="sidebar-link">View All Camps</a>
+        <a href="{{ url_for('warehouse_view') }}" class="sidebar-link">View Warehouse</a>
+        <a href="{{ url_for('admin_requests') }}" class="sidebar-link">Resource Requests</a>
+        <a href="{{ url_for('nday_page') }}" class="sidebar-link active">N-Day Prediction</a>
+        <div class="sidebar-bottom">
+            <a href="/logout" class="sidebar-link">Logout</a>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="notif-toasts" class="notif-toast-container"></div>
+
+    <div class="page-content">
+        <h2>N-Day Resource Prediction</h2>
+        <p style="color:#555; margin-bottom:20px;">
+            Uses an XGBoost model trained on past request data to forecast the resources needed for the next day.
+        </p>
+
+        <button id="predict-btn" class="nday-predict-btn">Predict Next Day Demand</button>
+
+        <!-- Loading Spinner -->
+        <div id="predict-loader" class="nday-loader hidden">
+            <div class="nday-spinner"></div>
+            <span>Running prediction model…</span>
+        </div>
+
+        <!-- Error / Insufficient data message -->
+        <div id="predict-error" class="nday-error hidden"></div>
+
+        <!-- Results Section -->
+        <div id="predict-results" class="hidden">
+
+            <div class="nday-meta">
+                <span id="meta-days"></span>
+                <span id="meta-camps"></span>
+                <span id="meta-pop"></span>
+            </div>
+
+            <div id="predict-cards" class="nday-card-container"></div>
+
+            <table id="predict-table" class="simple-table" style="max-width:700px;">
+                <thead>
+                    <tr>
+                        <th>Resource</th>
+                        <th>Predicted Qty Needed</th>
+                        <th>Trend</th>
+                    </tr>
+                </thead>
+                <tbody id="predict-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const btn   = document.getElementById('predict-btn');
+        const loader = document.getElementById('predict-loader');
+        const errorBox = document.getElementById('predict-error');
+        const results  = document.getElementById('predict-results');
+        const cards    = document.getElementById('predict-cards');
+        const tbody    = document.getElementById('predict-tbody');
+
+        const trendIcons = {
+            increasing: '&#9650; Increasing',
+            decreasing: '&#9660; Decreasing',
+            stable:     '&#9644; Stable',
+            unknown:    '— Unknown'
+        };
+        const trendColors = {
+            increasing: '#dc2626',
+            decreasing: '#16a34a',
+            stable:     '#2563eb',
+            unknown:    '#888'
+        };
+        const itemLabels = {
+            'food': 'Food (kg)',
+            'water': 'Water (ltr)',
+            'medicine-kit': 'Med-Kits',
+            'other': 'Other'
+        };
+
+        btn.addEventListener('click', async () => {
+            // Reset UI
+            errorBox.classList.add('hidden');
+            results.classList.add('hidden');
+            loader.classList.remove('hidden');
+            btn.disabled = true;
+
+            try {
+                const resp = await fetch('/admin/nday/predict', { method: 'POST' });
+                const data = await resp.json();
+
+                loader.classList.add('hidden');
+                btn.disabled = false;
+
+                if (!data.ok) {
+                    errorBox.innerHTML = `<strong>Cannot predict:</strong> ${data.message}`;
+                    errorBox.classList.remove('hidden');
+                    return;
+                }
+
+                // Meta info
+                document.getElementById('meta-days').textContent  = `Days of data: ${data.days_of_data}`;
+                document.getElementById('meta-camps').textContent = `Active camps: ${data.stats.num_camps}`;
+                document.getElementById('meta-pop').textContent   = `Total population: ${data.stats.total_pop}`;
+
+                cards.innerHTML = '';
+                data.predictions.forEach(p => {
+                    const label = itemLabels[p.item_type] || p.item_type;
+                    const trendHTML = trendIcons[p.trend] || p.trend;
+                    const tColor = trendColors[p.trend] || '#888';
+
+                    cards.innerHTML += `
+                        <div class="nday-card">
+                            <div class="nday-card-title">${label}</div>
+                            <div class="nday-card-value">${p.predicted_qty}</div>
+                            <div class="nday-card-trend" style="color:${tColor}">${trendHTML}</div>
+                        </div>`;
+                });
+
+                // Table
+                tbody.innerHTML = '';
+                data.predictions.forEach(p => {
+                    const label = itemLabels[p.item_type] || p.item_type;
+                    const trendHTML = trendIcons[p.trend] || p.trend;
+                    const tColor = trendColors[p.trend] || '#888';
+
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${label}</td>
+                            <td style="font-weight:bold;">${p.predicted_qty}</td>
+                            <td style="color:${tColor}">${trendHTML}</td>
+                        </tr>`;
+                });
+
+                results.classList.remove('hidden');
+
+            } catch (err) {
+                loader.classList.add('hidden');
+                btn.disabled = false;
+                errorBox.innerHTML = `<strong>Error:</strong> ${err.message}`;
+                errorBox.classList.remove('hidden');
+            }
+        });
+    </script>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

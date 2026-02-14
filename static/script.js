@@ -1,5 +1,3 @@
-// ============ LOGIN & SIGNUP VALIDATION ============
-
 // Validator functions
 function isValidEmail(email) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

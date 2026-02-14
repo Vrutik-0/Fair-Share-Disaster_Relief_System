@@ -7,6 +7,7 @@ from Algo.clustering import cluster_camps
 from Algo.priority import rank_camps_greedy
 from Algo.knapsack import knapsack
 from Algo.routes import greedy_route
+from Algo.model import predict_next_day
 
 #NGO Base Coord
 DEPOT_X = 500
@@ -1761,6 +1762,23 @@ def api_mark_read():
     conn.close()
 
     return jsonify({"ok": True})
+
+
+# ===== N-Day Prediction Page =====
+@app.route("/admin/nday")
+def nday_page():
+    if session.get("role") != "admin":
+        return redirect(url_for("login"))
+    return render_template("dashboard/nday.html")
+
+
+@app.route("/admin/nday/predict", methods=["POST"])
+def nday_predict():
+    if session.get("role") != "admin":
+        return jsonify({"ok": False, "message": "Unauthorized"}), 401
+
+    result = predict_next_day()
+    return jsonify(result)
 
 
 #Logout
