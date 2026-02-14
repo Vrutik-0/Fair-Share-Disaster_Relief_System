@@ -152,7 +152,7 @@ if (totalPop && injuredPop) {
     injuredPop.addEventListener("input", updateUrgency);
 }
 
-// Tomtom API key — injected from server via window.TOMTOM_KEY
+// Tomtom API key
 const TOMTOM_KEY = window.TOMTOM_KEY || 'undefined-key-check-env';
 
 // Map grid (0-1000) to Ahmedabad
