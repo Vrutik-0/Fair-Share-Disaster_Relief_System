@@ -12,6 +12,7 @@ A comprehensive disaster management system designed to optimize the allocation o
 - **Real-time Notifications:** Alerts users about request statuses and system updates.
 - **Interactive Map Visualization:** Displays camps, truck routes, and the NGO depot on a TomTom-based map with urgency color coding.
 - **Fair Allocation Engine:** Uses weighted largest-remainder method to fairly distribute limited supplies across competing requests based on priority.
+- **Data Visualization:** Uses python matplotlib libary to display the data over dashboards .
 
 ## 🛠️ Tech Stack
 
@@ -48,10 +49,11 @@ The admin has full control over the disaster relief pipeline. The dashboard disp
 - Requires minimum 9 days of request history; shows an insufficient-data message otherwise
 - Features engineered: day-of-week, day-number, lag-1/2/3, rolling 3/5/7-day averages
   
-<img width="1908" height="922" alt="Screenshot 2026-02-14 214518" src="https://github.com/user-attachments/assets/73086868-f046-4a60-bf78-ee30e249c971" />
+<img width="1919" height="914" alt="Screenshot 2026-02-15 165801" src="https://github.com/user-attachments/assets/60702157-e5d6-433e-b37e-778bcd6d5a3f" />
 
-<img width="1919" height="916" alt="Screenshot 2026-02-14 214549" src="https://github.com/user-attachments/assets/7ec94706-d018-48c9-ad47-17ef8f0b523f" />
+<img width="1506" height="912" alt="Screenshot 2026-02-15 165818" src="https://github.com/user-attachments/assets/5846cee1-87b8-4379-94d5-b13cd0616f75" />
 
+<img width="1919" height="829" alt="Screenshot 2026-02-15 165839" src="https://github.com/user-attachments/assets/35b35e2f-e1e3-4b23-8ab8-5ab6aa1d9843" />
 
 ### 2. 🏕️ Camp Manager Dashboard (`/camp/dashboard`)
 
@@ -77,7 +79,9 @@ The score is capped at 1.0 and is computed automatically when a camp is added. I
 - **Medium:** urgency ≥ 0.3
 - **Low:** urgency < 0.3
 
-<img width="1919" height="650" alt="Screenshot 2026-02-09 233838" src="https://github.com/user-attachments/assets/979477fa-4ac9-4a8a-9def-cb5fa1bcda43" />
+
+<img width="1919" height="893" alt="Screenshot 2026-02-15 165907" src="https://github.com/user-attachments/assets/eb0e7bd5-a4eb-40b6-9162-1d464a890100" />
+
 
 ### 3. 🚛 Driver Dashboard (`/driver/dashboard`)
 
@@ -95,7 +99,7 @@ Drivers see their assigned truck, delivery route, and camp-by-camp delivery chec
 
 When all deliveries for a truck are completed, the truck status resets to `available`. When all trucks finish, the system-wide execution lock is automatically released.
 
-<img width="1883" height="910" alt="Screenshot 2026-02-09 233916" src="https://github.com/user-attachments/assets/91bf22e2-1ece-437e-8107-2195de3a456c" />
+<img width="1919" height="905" alt="Screenshot 2026-02-15 170845" src="https://github.com/user-attachments/assets/d95d3e43-92d5-4d56-ab3b-f26bd52d60ae" />
 
 ## 🧠 Algorithms Used
 
