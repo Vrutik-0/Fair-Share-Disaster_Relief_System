@@ -32,12 +32,6 @@
 
     <div class="page-content">
         <h2>N-Day Resource Prediction</h2>
-        <p style="margin-bottom: 24px;">
-            XGBoost model trained on past request data to forecast next-day resource demand.
-        </p>
-
-        <!-- Prediction Section -->
-        <h3>Predict Next Day</h3>
         <button id="predict-btn" class="nday-predict-btn">Predict Next Day Demand</button>
 
         <div id="predict-loader" class="nday-loader hidden">
@@ -70,12 +64,12 @@
 
         <hr style="border: none; border-top: 1px solid var(--border); margin: 32px 0;">
 
-        <!-- Historical Data Visualization (below predictions) -->
+        <!-- Historical Data -->
         <h3>Historical Demand Data</h3>
 
         <div id="matplotlib-section" class="chart-container">
             <h4>Historical Demand Analysis</h4>
-            <button id="load-mpl-chart" class="nday-predict-btn" style="margin-bottom: 16px;" onclick="loadMatplotlibChart()">
+            <button id="mtl-chart" class="nday-predict-btn" style="margin-bottom: 16px;" onclick="mltChart()">
                 Load Historical Chart
             </button>
             <div id="mpl-loader" class="nday-loader hidden">
@@ -83,8 +77,16 @@
                 <span>Generating chart...</span>
             </div>
             <div id="mpl-chart-wrapper" class="hidden">
-                <img id="mpl-chart-img" class="matplotlib-chart" alt="Historical Demand Chart">
+                <img id="mtl-img" class="matplotlib-chart" alt="Historical Demand Chart">
             </div>
+        </div>
+
+        <div style="margin-top:18px;">
+            <button id="download-csv-btn" class="nday-predict-btn">Download day-wise data</button>
+
+            <span id="download-csv-loader" class="nday-loader hidden">
+                <div class="nday-spinner"></div><span>Preparing CSV...</span>
+            </span>
         </div>
     </div>
 
@@ -115,9 +117,9 @@
             'other': 'Other'
         };
 
-        // Load Matplotlib chart
-        function loadMatplotlibChart() {
-            const mplBtn = document.getElementById('load-mpl-chart');
+        // Matplotlib chart
+        function mltChart() {
+            const mplBtn = document.getElementById('mtl-chart');
             const mplLoader = document.getElementById('mpl-loader');
             const mplWrapper = document.getElementById('mpl-chart-wrapper');
 
@@ -131,7 +133,7 @@
                     mplLoader.classList.add('hidden');
                     mplBtn.disabled = false;
                     if (data.ok) {
-                        document.getElementById('mpl-chart-img').src = 'data:image/png;base64,' + data.chart;
+                        document.getElementById('mtl-img').src = 'data:image/png;base64,' + data.chart;
                         mplWrapper.classList.remove('hidden');
                         mplBtn.textContent = 'Refresh Chart';
                     } else {
@@ -203,6 +205,47 @@
                 errorBox.innerHTML = `<strong>Error:</strong> ${err.message}`;
                 errorBox.classList.remove('hidden');
             }
+        });
+
+        const csvBtn = document.getElementById('download-csv-btn');
+        const csvLoader = document.getElementById('download-csv-loader');
+
+        csvBtn.addEventListener('click', async () => {
+        csvBtn.disabled = true;
+        csvLoader.classList.remove('hidden');
+        try {
+            const res = await fetch('/admin/nday/export-csv');
+            if (!res.ok) {
+            const err = await res.json().catch(()=>null);
+            throw new Error(err?.message || 'Export failed');
+            }
+
+            const blob = await res.blob();
+            let fname = `fsv1_daywise_${new Date().toISOString().slice(0,10)}.csv`;
+            const disp = res.headers.get('Content-Disposition');
+
+            if (disp) {
+            const m = disp.match(/filename="?([^"]+)"?/);
+            if (m) fname = m[1];
+            }
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fname;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } 
+
+        catch (err) {
+            alert('CSV export failed: ' + err.message);
+        } 
+        finally {
+            csvBtn.disabled = false;
+            csvLoader.classList.add('hidden');
+        }
         });
     </script>
 

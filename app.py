@@ -1,11 +1,9 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify , make_response
 from werkzeug.security import generate_password_hash, check_password_hash
 from db import get_db_connection
-import os, io, base64
+import os, io, base64 , csv
 from collections import defaultdict
 from dotenv import load_dotenv
-
-# Load environment variables from .env
 load_dotenv()
 from Algo.clustering import cluster_camps
 from Algo.priority import rank_camps_greedy
@@ -100,9 +98,7 @@ def calculate_urgency(total_population, injured_population):
     if total_population == 0:
         return 0.0
 
-    score = (
-        (injured_population / total_population) * 0.7
-        + (total_population / 1000) * 0.3 )
+    score = ( (injured_population / total_population) * 0.7 + (total_population / 1000) * 0.3 )
 
     return round(min(score, 1.0), 2)
 
@@ -172,10 +168,10 @@ def check_low_stock(cur):
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
 
-# Get TomTom API key from environment
+# Get TomTom API
 TOMTOM_KEY = os.getenv("TOMTOM_KEY")
 
-# Inject TOMTOM_KEY into all templates
+#TOMTOM_KEY into all templates
 @app.context_processor
 def inject_keys():
     return dict(tomtom_key=TOMTOM_KEY)
@@ -1586,7 +1582,7 @@ def mark_camp_delivered(camp_id):
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # 1️⃣ Get driver's truck
+    # Get driver's truck
     cur.execute("""
         SELECT truck_id
         FROM trucks
@@ -1833,7 +1829,7 @@ def nday_chart():
 
     fig, axes = plt.subplots(2, 1, figsize=(10, 6), dpi=100, facecolor='#2a2d35')
 
-    # ---- Chart 1: Stacked area chart of daily demand by item type ----
+    # Stacked area chart of daily demand by item type
     ax1 = axes[0]
     ax1.set_facecolor('#31343d')
     all_dates = pd.date_range(raw["date"].min(), raw["date"].max(), freq="D")
@@ -1856,7 +1852,7 @@ def nday_chart():
     for spine in ax1.spines.values():
         spine.set_color('#363940')
 
-    # ---- Chart 2: Total daily demand bar chart ----
+    # Total daily demand bar chart
     ax2 = axes[1]
     ax2.set_facecolor('#31343d')
     daily_total = pivot.sum(axis=1)
@@ -1925,7 +1921,7 @@ def dashboard_charts():
 
     charts = {}
 
-    # --- 1. Urgency Doughnut ---
+    # Urgency Chart
     fig1, ax1 = plt.subplots(figsize=(4, 3.5), dpi=100, facecolor='#2a2d35')
     vals = [urg[0], urg[1], urg[2]]
     labels = ['Critical', 'Moderate', 'Low']
@@ -1949,7 +1945,7 @@ def dashboard_charts():
     buf1.seek(0)
     charts['urgency'] = base64.b64encode(buf1.read()).decode('utf-8')
 
-    # --- 2. Trend Line ---
+    #  Trend Line
     fig2, ax2 = plt.subplots(figsize=(4.5, 3), dpi=100, facecolor='#2a2d35')
     ax2.set_facecolor('#31343d')
     if trend_rows:
@@ -1998,7 +1994,7 @@ def dashboard_charts():
     buf3.seek(0)
     charts['warehouse'] = base64.b64encode(buf3.read()).decode('utf-8')
 
-    # --- 4. Request Status Pie ---
+    # Request Status Pie
     fig4, ax4 = plt.subplots(figsize=(4, 3.5), dpi=100, facecolor='#2a2d35')
     if req_status:
         s_labels = [k.replace('_', ' ').title() for k in req_status.keys()]
@@ -2080,6 +2076,79 @@ def warehouse_chart():
 
     return jsonify({"ok": True, "chart": b64})
 
+
+@app.route("/admin/nday/export-csv")
+def nday_export_csv():
+    if session.get("role") != "admin":
+        return jsonify({"ok": False, "message": "Unauthorized"}), 401
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT DATE(r.request_date) AS req_date,
+               c.name AS camp_name,
+               r.item_type,
+               r.quantity_needed,
+               r.priority,
+               COALESCE(c.urgency_score, 0.0) AS urgency_score
+        FROM requests r
+        JOIN camps c ON r.camp_id = c.camp_id
+        ORDER BY DATE(r.request_date), c.name, r.item_type
+    """)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    if not rows:
+        return jsonify({"ok": False, "message": "No request data found"}), 400
+
+    si = io.StringIO()
+    writer = csv.writer(si)
+
+    from collections import OrderedDict
+    day_groups = OrderedDict()
+    for r in rows:
+        date = r[0].isoformat() if hasattr(r[0], "isoformat") else str(r[0])
+        camp_name, item_type, qty, priority, urgency = r[1], r[2], int(r[3] or 0), (r[4] or ""), float(r[5] or 0.0)
+        day_groups.setdefault(date, []).append({
+            "camp": camp_name,
+            "item": item_type,
+            "qty": qty,
+            "priority": priority,
+            "urgency": urgency
+        })
+
+    overall_totals = {}
+    for idx, (date, items) in enumerate(day_groups.items(), start=1):
+        writer.writerow([f"Day {idx} - {date}"])
+        writer.writerow(["Camp", "Item", "Quantity", "Priority", "Urgency", "Notes"])
+
+        day_totals = {}
+        for it in items:
+            note = "high urgency" if it["urgency"] >= 0.75 else "regular supply"
+            writer.writerow([it["camp"], it["item"], it["qty"], it["priority"], f"{it['urgency']:.2f}", note])
+            day_totals[it["item"]] = day_totals.get(it["item"], 0) + it["qty"]
+            overall_totals[it["item"]] = overall_totals.get(it["item"], 0) + it["qty"]
+
+        writer.writerow([])
+        writer.writerow([])
+        writer.writerow(["TOTALS:"])
+        writer.writerow(["Food", day_totals.get("food", 0)])
+        writer.writerow(["Water", day_totals.get("water", 0)])
+        writer.writerow(["Medicine", day_totals.get("medicine-kit", 0)])
+        writer.writerow([])
+
+    # overall totals data
+    writer.writerow([])
+    writer.writerow(["OVERALL TOTALS:"])
+    writer.writerow(["Food", overall_totals.get("food", 0)])
+    writer.writerow(["Water", overall_totals.get("water", 0)])
+    writer.writerow(["Medicine", overall_totals.get("medicine-kit", 0)])
+
+    resp = make_response(si.getvalue())
+    resp.headers["Content-Disposition"] = "attachment; filename=fsv1_daywise_requests.csv"
+    resp.headers["Content-Type"] = "text/csv; charset=utf-8"
+    return resp
 
 #Logout
 @app.route("/logout")

@@ -1,3 +1,4 @@
+
 -- OPTIONAL: Clear existing data 
 
 -- TRUNCATE users, camps,warehouse_inventory, requests, allocations, trucks, truck_assignments ,notifications RESTART IDENTITY CASCADE;
@@ -58,6 +59,7 @@ INSERT INTO camps (name, cord_x, cord_y, total_population, injured_population, u
 
 ('Camp Delta',        700, 700,  950, 750,  0.84, 'critical',  3, NOW() - INTERVAL '2 days'),
 ('Camp Echo',          650, 600,  300, 100,  0.32, 'moderate',  3, NOW() - INTERVAL '2 days');
+select * fro
 
 -- ============================================================================
 -- WAREHOUSE

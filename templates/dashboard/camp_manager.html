@@ -39,7 +39,7 @@
     <div class="page-content">
         <h2>Camp Manager Dashboard</h2>
         <p style="margin-bottom: 24px;">
-            Welcome, <strong>{{ session.get('username', 'Manager') }}</strong>. Manage your camps, review resources, and submit requests.
+           Manage your camps, review resources, and submit requests.
         </p>
 
         <div class="map-notif-row">
@@ -110,7 +110,7 @@
     </script>
 
     <script>
-        // Inject TomTom API key from server (do NOT hardcode)
+        // TomTom API key
         window.TOMTOM_KEY = "{{ tomtom_key|e }}";
     </script>
     <script src="/static/script.js"></script>
