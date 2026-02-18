@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.security import generate_password_hash, check_password_hash
 from db import get_db_connection
 import os, io, base64 , csv
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from dotenv import load_dotenv
 load_dotenv()
 from Algo.clustering import cluster_camps
@@ -2105,7 +2105,6 @@ def nday_export_csv():
     si = io.StringIO()
     writer = csv.writer(si)
 
-    from collections import OrderedDict
     day_groups = OrderedDict()
     for r in rows:
         date = r[0].isoformat() if hasattr(r[0], "isoformat") else str(r[0])
