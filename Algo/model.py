@@ -1,11 +1,8 @@
-import numpy as np
 import pandas as pd
 from xgboost import XGBRegressor
 from db import get_db_connection
 
-
 minDays = 9
-
 
 def fetch_daily_demand():
     conn = get_db_connection()
@@ -25,7 +22,7 @@ def fetch_daily_demand():
     return df
 
 
-def _fetch_camp_stats():
+def fetch_camp_stats():
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("""
@@ -46,7 +43,7 @@ def _fetch_camp_stats():
     }
 
 
-def _build_features(series):
+def build_features(series):
     df = series.to_frame(name="demand")
     df["day_of_week"] = df.index.dayofweek
     first_day = df.index.min()
@@ -89,7 +86,7 @@ def predict_next_day():
             "days_of_data": unique_days,
         }
 
-    camp_stats = _fetch_camp_stats()
+    camp_stats = fetch_camp_stats()
 
     # Date range for filling gaps
     all_dates = pd.date_range(raw["date"].min(), raw["date"].max(), freq="D")
@@ -103,10 +100,10 @@ def predict_next_day():
         sub = sub.reindex(all_dates, fill_value=0)
         sub.index.name = "date"
 
-        X, y = _build_features(sub)
+        X, y = build_features(sub)
 
         if len(X) < 3:
-            # Not enough rows after feature engineering
+            # Not enough rows
             predictions.append({
                 "item_type": itype,
                 "predicted_qty": 0,
@@ -124,7 +121,7 @@ def predict_next_day():
         )
         model.fit(X, y)
 
-        # Build feature row for "tomorrow"
+        # Build feature row for tomorrow
         last_date = sub.index.max()
         tomorrow = last_date + pd.Timedelta(days=1)
 
